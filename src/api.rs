@@ -2,10 +2,9 @@
 //!
 //!
 
-use crate::api_schema::AccentPhrase;
+use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
 use crate::DEPTH;
-use serde::{Deserialize, Serialize};
-use serde_json::Error;
+
 use std::io::Read;
 use trace::trace;
 
@@ -20,23 +19,6 @@ pub struct AudioQuery {
     pub(crate) core_version: Option<String>,
 }
 
-#[allow(non_snake_case)]
-#[derive(Deserialize, Debug)]
-pub struct HttpValidationError {
-    Detail: Vec<ValidationError>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct ValidationError {
-    ///Location
-    loc: Vec<String>,
-    ///Message
-    msg: String,
-    ///Error Type
-    #[serde(rename = "type")]
-    _type: String,
-}
-
 #[derive(Debug)]
 pub enum AudioQueryErrors {
     Validation(HttpValidationError),
@@ -45,14 +27,14 @@ pub enum AudioQueryErrors {
     IO,
 }
 
-impl API for AudioQuery {
+impl Api for AudioQuery {
     type Response = Result<crate::api_schema::AudioQuery, AudioQueryErrors>;
     #[trace]
     fn post(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/audio_query")
             .query("speaker", &self.speaker.to_string());
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -111,14 +93,14 @@ struct AudioQueryFromPreset {
 
 impl AudioQueryFromPreset {}
 
-impl API for AudioQueryFromPreset {
+impl Api for AudioQueryFromPreset {
     type Response = Result<crate::api_schema::AudioQuery, AudioQueryErrors>;
     #[trace]
     fn post(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/audio_query")
             .query("preset_id", &self.preset_id.to_string());
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -164,7 +146,7 @@ impl API for AudioQueryFromPreset {
     }
 }
 
-pub trait API {
+pub trait Api {
     type Response;
     fn post(&self) -> Self::Response;
 }
@@ -196,12 +178,7 @@ pub enum AccentPhrasesErrors {
     IO,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct AccentPhrasesResponse {
-    accent_phrases: Vec<AccentPhrase>,
-}
-
-impl API for AccentPhrases {
+impl Api for AccentPhrases {
     type Response = Result<AccentPhrasesResponse, AccentPhrasesErrors>;
     #[trace]
     fn post(&self) -> Self::Response {
@@ -213,7 +190,7 @@ impl API for AccentPhrases {
             query
         };
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -269,13 +246,6 @@ impl API for AccentPhrases {
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct KanaParseError {
-    text: String,
-    error_name: String,
-    error_args: String,
-}
-
 ///Create Accent Phrase from External Audio
 ///
 /// Extracts f0 and aligned phonemes, calculates average f0 for every phoneme. Returns a list of AccentPhrase. This API works in the resolution of phonemes.
@@ -289,14 +259,14 @@ pub struct GuidedAccentPhrase {
     audio_file: String,
     normalize: bool,
 }
-impl API for GuidedAccentPhrase {
+impl Api for GuidedAccentPhrase {
     type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/guided_accent_phrase");
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -356,7 +326,7 @@ pub struct MoraData {
     accent_phrases: Vec<AccentPhrase>,
 }
 
-impl API for MoraData {
+impl Api for MoraData {
     type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -364,7 +334,7 @@ impl API for MoraData {
             .query("speaker", &self.speaker.to_string());
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -418,7 +388,7 @@ pub struct MoraLength {
     accent_phrases: Vec<AccentPhrase>,
 }
 
-impl API for MoraLength {
+impl Api for MoraLength {
     type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -426,7 +396,7 @@ impl API for MoraLength {
             .query("speaker", &self.speaker.to_string());
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -480,7 +450,7 @@ pub struct MoraPitch {
     accent_phrases: Vec<AccentPhrase>,
 }
 
-impl API for MoraPitch {
+impl Api for MoraPitch {
     type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -488,7 +458,7 @@ impl API for MoraPitch {
             .query("speaker", &self.speaker.to_string());
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -543,7 +513,7 @@ pub struct Synthesis {
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
-impl API for Synthesis {
+impl Api for Synthesis {
     type Response = Result<Vec<u8>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -555,7 +525,7 @@ impl API for Synthesis {
             query
         };
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -570,7 +540,9 @@ impl API for Synthesis {
             match status {
                 200 => {
                     let mut buffer = Vec::new();
-                    res.into_reader().read_to_end(&mut buffer);
+                    res.into_reader()
+                        .read_to_end(&mut buffer)
+                        .map_err(|_| AccentPhrasesErrors::IO)?;
                     Ok(buffer)
                 }
                 422 => res
@@ -602,7 +574,7 @@ pub struct CancellableSynthesis {
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
-impl API for CancellableSynthesis {
+impl Api for CancellableSynthesis {
     type Response = Result<Vec<u8>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -614,7 +586,7 @@ impl API for CancellableSynthesis {
             query
         };
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -629,7 +601,9 @@ impl API for CancellableSynthesis {
             match status {
                 200 => {
                     let mut buffer = Vec::new();
-                    res.into_reader().read_to_end(&mut buffer);
+                    res.into_reader()
+                        .read_to_end(&mut buffer)
+                        .map_err(|_| AccentPhrasesErrors::IO)?;
                     Ok(buffer)
                 }
                 422 => res
@@ -662,7 +636,7 @@ pub struct MultiSynthesis {
     pub(crate) audio_query: Vec<crate::api_schema::AudioQuery>,
 }
 
-impl API for MultiSynthesis {
+impl Api for MultiSynthesis {
     type Response = Result<Vec<u8>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -670,7 +644,7 @@ impl API for MultiSynthesis {
             .query("speaker", &self.speaker.to_string());
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -685,7 +659,9 @@ impl API for MultiSynthesis {
             match status {
                 200 => {
                     let mut buffer = Vec::new();
-                    res.into_reader().read_to_end(&mut buffer);
+                    res.into_reader()
+                        .read_to_end(&mut buffer)
+                        .map_err(|_| AccentPhrasesErrors::IO)?;
                     Ok(buffer)
                 }
                 422 => res
@@ -720,7 +696,7 @@ pub struct SynthesisMorphing {
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
-impl API for SynthesisMorphing {
+impl Api for SynthesisMorphing {
     type Response = Result<Vec<u8>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
@@ -730,7 +706,7 @@ impl API for SynthesisMorphing {
             .query("morph_rate", &self.morph_rate.to_string());
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -745,7 +721,9 @@ impl API for SynthesisMorphing {
             match status {
                 200 => {
                     let mut buffer = Vec::new();
-                    res.into_reader().read_to_end(&mut buffer);
+                    res.into_reader()
+                        .read_to_end(&mut buffer)
+                        .map_err(|_| AccentPhrasesErrors::IO)?;
                     Ok(buffer)
                 }
                 422 => res
@@ -778,14 +756,14 @@ pub struct GuidedSynthesis {
     pub(crate) form_data: crate::api_schema::GuidedSynthesisFormData,
 }
 
-impl API for GuidedSynthesis {
+impl Api for GuidedSynthesis {
     type Response = Result<Vec<u8>, AccentPhrasesErrors>;
 
     fn post(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/guided_synthesis");
 
         if let Some(cv) = &self.core_version {
-            query.query("core_version", &cv)
+            query.query("core_version", cv)
         } else {
             query
         }
@@ -807,7 +785,9 @@ impl API for GuidedSynthesis {
             match status {
                 200 => {
                     let mut buffer = Vec::new();
-                    res.into_reader().read_to_end(&mut buffer);
+                    res.into_reader()
+                        .read_to_end(&mut buffer)
+                        .map_err(|_| AccentPhrasesErrors::IO)?;
                     Ok(buffer)
                 }
                 422 => res

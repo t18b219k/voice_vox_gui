@@ -1,9 +1,6 @@
-use crate::api::API;
-use eframe::egui::{Color32, Context, FontFamily, Id, Layout, Sense, TextStyle, Ui};
+use eframe::egui::{Color32, Context, FontFamily, Layout};
 use eframe::epi::{App, Frame, Storage};
 use eframe::NativeOptions;
-use log::LevelFilter;
-use rodio::Source;
 
 mod api;
 mod api_schema;
@@ -21,7 +18,7 @@ struct VoiceVoxRust {
     current_view: CurrentView,
     tool_bar_config_editing: Vec<ToolBarOp>,
     cursoring: usize,
-    block_menu_control:bool
+    block_menu_control: bool,
 }
 
 enum CurrentView {
@@ -45,7 +42,7 @@ impl VoiceVoxRust {
             current_view: CurrentView::Main,
             tool_bar_config_editing: vec![],
             cursoring: 0,
-            block_menu_control: false
+            block_menu_control: false,
         }
     }
 }
@@ -82,7 +79,8 @@ impl App for VoiceVoxRust {
 
         let menu_bar_op = egui::containers::TopBottomPanel::top("TopMenu")
             .show(ctx, |ui| {
-              ui.add_enabled_ui(!self.block_menu_control,|ui|{menu::create_menu_bar(ui)}).inner
+                ui.add_enabled_ui(!self.block_menu_control, crate::menu::create_menu_bar)
+                    .inner
             })
             .inner;
 
@@ -104,7 +102,7 @@ impl App for VoiceVoxRust {
                     self.tool_bar_config_editing = self.tool_bar_config.clone();
                     self.current_view = CurrentView::ToolBarCustomize;
                     self.cursoring = 0;
-                    self.block_menu_control=true;
+                    self.block_menu_control = true;
                 }
                 TopMenuOp::SampleVoice => {}
                 TopMenuOp::DefaultStyle => {}
@@ -152,7 +150,7 @@ impl App for VoiceVoxRust {
                                     .fill(Color32::TRANSPARENT);
                                 ui.with_layout(Layout::right_to_left(), |ui| {
                                     if ui.add(exit).clicked() {
-                                        self.block_menu_control=false;
+                                        self.block_menu_control = false;
                                         self.current_view = CurrentView::Main;
                                     }
                                     if ui.add_enabled(changed, save_config).clicked() {
@@ -183,7 +181,7 @@ impl App for VoiceVoxRust {
                                     .tool_bar_config_editing
                                     .iter()
                                     .enumerate()
-                                    .find(|(idx, x)| **x == op)
+                                    .find(|(_, x)| **x == op)
                                     .map(|x| x.0)
                                     .unwrap()
                             }
@@ -255,29 +253,4 @@ fn main() {
             transparent: false,
         },
     );
-
-    let call = api::AudioQuery {
-        text: "音声合成".to_string(),
-        speaker: 1,
-        core_version: None,
-    };
-    let aq = call.post().unwrap();
-    let call = api::AccentPhrases {
-        text: "音声合成".to_string(),
-        speaker: 1,
-        is_kana: None,
-        core_version: None,
-    };
-    let x = call.post().unwrap();
-    let synth = api::Synthesis {
-        speaker: 1,
-        enable_interrogative_upspeak: None,
-        core_version: None,
-        audio_query: aq,
-    };
-    let wave = std::io::Cursor::new(synth.post().unwrap());
-    let (_stream, stream_handle) = rodio::OutputStream::try_default().unwrap();
-    let source = rodio::Decoder::new(wave).unwrap();
-    stream_handle.play_raw(source.convert_samples());
-    std::thread::sleep(std::time::Duration::from_secs(5));
 }

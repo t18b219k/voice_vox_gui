@@ -59,7 +59,7 @@ pub struct GuidedSynthesisFormData {
 impl GuidedSynthesisFormData {
     pub(crate) fn build_form(&self) -> [(&str, String); 9] {
         let mut ctr = String::new();
-        let mut wav_container = unsafe { ctr.as_mut_vec() };
+        let wav_container = unsafe { ctr.as_mut_vec() };
         wav_container.extend_from_slice(&self.audio_file);
         [
             ("kana", self.kana.clone()),
@@ -73,4 +73,33 @@ impl GuidedSynthesisFormData {
             ("speed_scale", self.speed_scale.to_string()),
         ]
     }
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug)]
+pub struct HttpValidationError {
+    Detail: Vec<ValidationError>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct ValidationError {
+    ///Location
+    loc: Vec<String>,
+    ///Message
+    msg: String,
+    ///Error Type
+    #[serde(rename = "type")]
+    _type: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct AccentPhrasesResponse {
+    accent_phrases: Vec<AccentPhrase>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct KanaParseError {
+    text: String,
+    error_name: String,
+    error_args: String,
 }

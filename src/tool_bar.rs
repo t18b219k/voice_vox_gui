@@ -1,5 +1,5 @@
 use eframe::egui;
-use eframe::egui::{TextStyle, Ui, Widget};
+use eframe::egui::Ui;
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
@@ -16,7 +16,7 @@ pub enum ToolBarOp {
     Blank,
 }
 
-pub const TOOL_BAR_OPS: once_cell::sync::Lazy<HashMap<ToolBarOp, String>> =
+pub static TOOL_BAR_OPS: once_cell::sync::Lazy<HashMap<ToolBarOp, String>> =
     once_cell::sync::Lazy::new(|| {
         [
             ("連続再生", ToolBarOp::PlayAll),
