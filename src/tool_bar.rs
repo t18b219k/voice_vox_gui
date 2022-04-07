@@ -35,12 +35,11 @@ pub const TOOL_BAR_OPS: once_cell::sync::Lazy<HashMap<ToolBarOp, String>> =
         .collect()
     });
 
-
 pub fn tool_bar(
     ui: &mut Ui,
     tool_bar_config: &[ToolBarOp],
     unit: f32,
-    is_customizing:bool,
+    is_customizing: bool,
 ) -> Option<ToolBarOp> {
     ui.horizontal(|ui| {
         let mut o = None;
@@ -62,8 +61,6 @@ pub fn tool_bar(
             }
         }
 
-
-
         if let Some(ops) = split.next() {
             ui.with_layout(egui::Layout::right_to_left(), |ui| {
                 for op in ops.iter().rev() {
@@ -71,9 +68,7 @@ pub fn tool_bar(
                         ToolBarOp::Blank => {}
                         x => {
                             if ui
-                                .button(
-                                    egui::RichText::new(&TOOL_BAR_OPS[x]).size(unit),
-                                )
+                                .button(egui::RichText::new(&TOOL_BAR_OPS[x]).size(unit))
                                 .clicked()
                             {
                                 o = Some(*x)
@@ -81,10 +76,10 @@ pub fn tool_bar(
                         }
                     }
                 }
-                if is_customizing{
-                    let sz=ui.available_size();
-                    if ui.add_sized(sz,egui::Button::new("")).clicked(){
-                        o=Some(ToolBarOp::Blank)
+                if is_customizing {
+                    let sz = ui.available_size();
+                    if ui.add_sized(sz, egui::Button::new("")).clicked() {
+                        o = Some(ToolBarOp::Blank)
                     }
                 }
             });
