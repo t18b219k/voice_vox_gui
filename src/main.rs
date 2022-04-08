@@ -234,7 +234,6 @@ impl App for VoiceVoxRust {
     }
 }
 fn main() {
-    println!("Hello, world!");
     simple_log::console("debug").unwrap();
 
     eframe::run_native(

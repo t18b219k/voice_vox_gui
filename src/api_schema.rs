@@ -103,3 +103,75 @@ pub struct KanaParseError {
     error_name: String,
     error_args: String,
 }
+
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug)]
+pub struct Preset {
+    id: i64,
+    name: String,
+    speaker_uuid: String,
+    style_id: i64,
+    speedScale: f64,
+    pitchScale: f64,
+    intonationScale: f64,
+    volumeScale: f64,
+    prePhonemeLength: f64,
+    postPhonemeLength: f64,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Speaker {
+    name: String,
+    pub(crate) speaker_uuid: String,
+    styles: Vec<SpeakerStyle>,
+    version: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct SpeakerStyle {
+    name: String,
+    id: i64,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SpeakerInfoRaw {
+    pub policy: String,
+    /// base64
+    pub portrait: String,
+
+    pub style_infos: Vec<StyleInfoRaw>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StyleInfoRaw {
+    pub id: i64,
+    /// base64
+    pub icon: String,
+    /// base64
+    pub voice_samples: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SpeakerInfo {
+    /// markdown format.
+    pub(crate) policy: String,
+    ///png file.
+    pub(crate) portrait: Vec<u8>,
+    pub(crate) style_infos: Vec<StyleInfo>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct StyleInfo {
+    pub(crate) id: i64,
+    ///
+    pub(crate) icon: Vec<u8>,
+    ///wav file
+    pub(crate) voice_samples: Vec<Vec<u8>>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct SupportedDevices {
+    cpu: bool,
+    cuda: bool,
+    dml: Option<bool>,
+}
