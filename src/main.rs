@@ -256,7 +256,6 @@ impl App for VoiceVoxRust {
                         .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
                         .resizable(false)
                         .show(ctx, |ui| {
-
                             let h = ui
                                 .label(
                                     egui::RichText::new("カスタマイズを放棄しますか")

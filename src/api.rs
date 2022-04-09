@@ -5,8 +5,11 @@
 use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
 use crate::DEPTH;
 
-use std::io::Read;
+use eframe::egui::Response;
+use std::io::{Error, Read};
 use trace::trace;
+
+pub type CoreVersion = Option<String>;
 
 /// # 音声合成用のクエリを作成する
 ///
@@ -28,55 +31,36 @@ pub enum AudioQueryErrors {
 }
 
 impl Api for AudioQuery {
-    type Response = Result<crate::api_schema::AudioQuery, AudioQueryErrors>;
+    type Response = Result<crate::api_schema::AudioQuery, APIError>;
     #[trace]
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/audio_query")
-            .query("speaker", &self.speaker.to_string());
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .query("text", &self.text)
-        .call()
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AudioQueryErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AudioQueryErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", txt);
-                        serde_json::from_str::<crate::api_schema::AudioQuery>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AudioQueryErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AudioQueryErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AudioQueryErrors::Validation(e)),
-                        _ => Err(AudioQueryErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AudioQueryErrors::Unknown)
+        ureq::post("http://localhost:50021/audio_query")
+            .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version)
+            .query("text", &self.text)
+            .call()
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res
+                        .into_json::<crate::api_schema::AudioQuery>()
+                        .map_err(|e| APIError::Io(e)),
+
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -88,61 +72,41 @@ impl Api for AudioQuery {
 struct AudioQueryFromPreset {
     text: String,
     preset_id: i64,
-    core_version: Option<String>,
+    core_version: CoreVersion,
 }
 
 impl AudioQueryFromPreset {}
 
 impl Api for AudioQueryFromPreset {
-    type Response = Result<crate::api_schema::AudioQuery, AudioQueryErrors>;
+    type Response = Result<crate::api_schema::AudioQuery, APIError>;
     #[trace]
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/audio_query")
-            .query("preset_id", &self.preset_id.to_string());
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .query("text", &self.text)
-        .call()
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AudioQueryErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AudioQueryErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", txt);
-                        serde_json::from_str::<crate::api_schema::AudioQuery>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AudioQueryErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AudioQueryErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AudioQueryErrors::Validation(e)),
-                        _ => Err(AudioQueryErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AudioQueryErrors::Unknown)
+        ureq::post("http://localhost:50021/audio_query")
+            .query("preset_id", &self.preset_id.to_string())
+            .add_core_version(&self.core_version)
+            .query("text", &self.text)
+            .call()
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res
+                        .into_json::<crate::api_schema::AudioQuery>()
+                        .map_err(|e| APIError::Io(e)),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -167,16 +131,13 @@ pub struct AccentPhrases {
     pub(crate) text: String,
     pub(crate) speaker: i64,
     pub(crate) is_kana: Option<bool>,
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
 }
 
 #[derive(Debug)]
 pub enum AccentPhrasesErrors {
-    Validation(HttpValidationError),
     KanaParseError(KanaParseError),
-    CantParseBySerde,
-    Unknown,
-    IO,
+    ApiError(APIError),
 }
 
 impl Api for AccentPhrases {
@@ -184,14 +145,10 @@ impl Api for AccentPhrases {
     #[trace]
     fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/audio_query")
-            .query("speaker", &self.speaker.to_string());
-        let query = if let Some(v) = &self.is_kana {
+            .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version);
+        if let Some(v) = &self.is_kana {
             query.query("is_kana", &v.to_string())
-        } else {
-            query
-        };
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
         } else {
             query
         }
@@ -199,48 +156,30 @@ impl Api for AccentPhrases {
         .call()
         .map_err(|e| {
             log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
+            if let ureq::Error::Status(422, res) = e {
+                AccentPhrasesErrors::ApiError(gen_http_validation_error(res))
+            } else if let ureq::Error::Status(400, res) = e {
+                match res
+                    .into_json::<KanaParseError>()
+                    .map_err(|e| APIError::Io(e))
+                {
+                    Ok(e) => AccentPhrasesErrors::KanaParseError(e),
+                    Err(e) => AccentPhrasesErrors::ApiError(e),
+                }
+            } else {
+                AccentPhrasesErrors::ApiError(APIError::Ureq(e))
+            }
         })
         .and_then(|res| {
             let status = res.status();
             log::debug!("{}", status);
             match status {
                 200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", txt);
-                        serde_json::from_str::<AccentPhrasesResponse>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AccentPhrasesErrors::CantParseBySerde
-                        })
-                    }),
-                400 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<KanaParseError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::KanaParseError(e)),
-                        _ => Err(AccentPhrasesErrors::CantParseBySerde),
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
+                    .into_json::<crate::api::AccentPhrasesResponse>()
+                    .map_err(|e| AccentPhrasesErrors::ApiError(APIError::Io(e))),
                 x => {
                     log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+                    Err(AccentPhrasesErrors::ApiError(APIError::Unknown))
                 }
             }
         })
@@ -252,7 +191,7 @@ impl Api for AccentPhrases {
 /// Extracts f0 and aligned phonemes, calculates average f0 for every phoneme. Returns a list of AccentPhrase. This API works in the resolution of phonemes.
 pub struct GuidedAccentPhrase {
     //in query
-    core_version: Option<String>,
+    core_version: CoreVersion,
     // in body
     text: String,
     speaker: i64,
@@ -280,38 +219,22 @@ impl Api for GuidedAccentPhrase {
         ])
         .map_err(|e| {
             log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
+            AccentPhrasesErrors::ApiError(if let ureq::Error::Status(422, res) = e {
+                gen_http_validation_error(res)
+            } else {
+                APIError::Ureq(e)
+            })
         })
         .and_then(|res| {
             let status = res.status();
             log::debug!("{}", status);
             match status {
                 200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", txt);
-                        serde_json::from_str::<Vec<AccentPhrase>>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AccentPhrasesErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
+                    .into_json::<Vec<AccentPhrase>>()
+                    .map_err(|e| AccentPhrasesErrors::ApiError(APIError::Io(e))),
                 x => {
                     log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+                    Err(AccentPhrasesErrors::ApiError(APIError::Unknown))
                 }
             }
         })
@@ -322,61 +245,38 @@ impl Api for GuidedAccentPhrase {
 pub struct MoraData {
     //in query
     speaker: i64,
-    core_version: Option<String>,
+    core_version: CoreVersion,
     //in body
     accent_phrases: Vec<AccentPhrase>,
 }
 
 impl Api for MoraData {
-    type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/guided_accent_phrase")
-            .query("speaker", &self.speaker.to_string());
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_json(&self.accent_phrases)
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", &txt);
-                        serde_json::from_str::<Vec<AccentPhrase>>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AccentPhrasesErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::post("http://localhost:50021/guided_accent_phrase")
+            .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version)
+            .send_json(&self.accent_phrases)
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res.into_json::<_>().map_err(|e| APIError::Io(e)),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -384,61 +284,38 @@ impl Api for MoraData {
 pub struct MoraLength {
     // in query.
     speaker: i64,
-    core_version: Option<String>,
+    core_version: CoreVersion,
     // in body.
     accent_phrases: Vec<AccentPhrase>,
 }
 
 impl Api for MoraLength {
-    type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/guided_accent_phrase")
-            .query("speaker", &self.speaker.to_string());
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_json(&self.accent_phrases)
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", &txt);
-                        serde_json::from_str::<Vec<AccentPhrase>>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AccentPhrasesErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::post("http://localhost:50021/mora_length")
+            .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version)
+            .send_json(&self.accent_phrases)
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res.into_json::<_>().map_err(|e| APIError::Io(e)),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -446,61 +323,37 @@ impl Api for MoraLength {
 pub struct MoraPitch {
     // in query.
     speaker: i64,
-    core_version: Option<String>,
+    core_version: CoreVersion,
     // in body.
     accent_phrases: Vec<AccentPhrase>,
 }
 
 impl Api for MoraPitch {
-    type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/guided_accent_phrase")
-            .query("speaker", &self.speaker.to_string());
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_json(&self.accent_phrases)
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|txt| {
-                        log::debug!("{}", &txt);
-                        serde_json::from_str::<Vec<AccentPhrase>>(&txt).map_err(|err| {
-                            log::error!("{}", err);
-                            AccentPhrasesErrors::CantParseBySerde
-                        })
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::post("http://localhost:50021/mora_pitch")
+            .query("speaker", &self.speaker.to_string())
+            .send_json(&self.accent_phrases)
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res.into_json::<_>().map_err(|e| APIError::Io(e)),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -509,31 +362,31 @@ pub struct Synthesis {
     // in query
     pub(crate) speaker: i64,
     pub(crate) enable_interrogative_upspeak: Option<bool>,
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
 impl Api for Synthesis {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/synthesis")
             .query("speaker", &self.speaker.to_string());
-        let query = if let Some(cv) = &self.enable_interrogative_upspeak {
+        if let Some(cv) = &self.enable_interrogative_upspeak {
             query.query("enable_interrogative_upspeak", &cv.to_string())
         } else {
             query
-        };
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
         }
+        .add_core_version(&self.core_version)
         .send_json(&self.audio_query)
         .map_err(|e| {
             log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
+            if let ureq::Error::Status(422, res) = e {
+                gen_http_validation_error(res)
+            } else {
+                APIError::Ureq(e)
+            }
         })
         .and_then(|res| {
             let status = res.status();
@@ -543,22 +396,12 @@ impl Api for Synthesis {
                     let mut buffer = Vec::new();
                     res.into_reader()
                         .read_to_end(&mut buffer)
-                        .map_err(|_| AccentPhrasesErrors::IO)?;
+                        .map_err(|e| APIError::Io(e))?;
                     Ok(buffer)
                 }
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
                 x => {
                     log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+                    Err(APIError::Unknown)
                 }
             }
         })
@@ -570,31 +413,31 @@ pub struct CancellableSynthesis {
     // in query
     pub(crate) speaker: i64,
     pub(crate) enable_interrogative_upspeak: Option<bool>,
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
 impl Api for CancellableSynthesis {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/cancellable_synthesis")
             .query("speaker", &self.speaker.to_string());
-        let query = if let Some(cv) = &self.enable_interrogative_upspeak {
+        if let Some(cv) = &self.enable_interrogative_upspeak {
             query.query("enable_interrogative_upspeak", &cv.to_string())
         } else {
             query
-        };
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
         }
+        .add_core_version(&self.core_version)
         .send_json(&self.audio_query)
         .map_err(|e| {
             log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
+            if let ureq::Error::Status(422, res) = e {
+                gen_http_validation_error(res)
+            } else {
+                APIError::Ureq(e)
+            }
         })
         .and_then(|res| {
             let status = res.status();
@@ -604,22 +447,13 @@ impl Api for CancellableSynthesis {
                     let mut buffer = Vec::new();
                     res.into_reader()
                         .read_to_end(&mut buffer)
-                        .map_err(|_| AccentPhrasesErrors::IO)?;
+                        .map_err(|e| APIError::Io(e))?;
                     Ok(buffer)
                 }
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
+
                 x => {
                     log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+                    Err(APIError::Unknown)
                 }
             }
         })
@@ -632,55 +466,44 @@ impl Api for CancellableSynthesis {
 pub struct MultiSynthesis {
     // in query
     pub(crate) speaker: i64,
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: Vec<crate::api_schema::AudioQuery>,
 }
 
 impl Api for MultiSynthesis {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/multi_synthesis")
-            .query("speaker", &self.speaker.to_string());
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_json(&self.audio_query)
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => {
-                    let mut buffer = Vec::new();
-                    res.into_reader()
-                        .read_to_end(&mut buffer)
-                        .map_err(|_| AccentPhrasesErrors::IO)?;
-                    Ok(buffer)
+        ureq::post("http://localhost:50021/multi_synthesis")
+            .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version)
+            .send_json(&self.audio_query)
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => {
+                        let mut buffer = Vec::new();
+                        res.into_reader()
+                            .read_to_end(&mut buffer)
+                            .map_err(|e| APIError::Io(e))?;
+                        Ok(buffer)
+                    }
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
                 }
-            }
-        })
+            })
     }
 }
 
@@ -692,57 +515,47 @@ pub struct SynthesisMorphing {
     pub(crate) base_speaker: i64,
     pub(crate) target_speaker: i64,
     pub(crate) morph_rate: f64,
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
 
 impl Api for SynthesisMorphing {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/synthesis_morphing")
+        ureq::post("http://localhost:50021/synthesis_morphing")
             .query("base_speaker", &self.base_speaker.to_string())
             .query("target_speaker", &self.target_speaker.to_string())
-            .query("morph_rate", &self.morph_rate.to_string());
+            .query("morph_rate", &self.morph_rate.to_string())
+            .add_core_version(&self.core_version)
+            .send_json(&self.audio_query)
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
+                }
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => {
+                        let mut buffer = Vec::new();
+                        res.into_reader()
+                            .read_to_end(&mut buffer)
+                            .map_err(|e| APIError::Io(e))?;
+                        Ok(buffer)
+                    }
 
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_json(&self.audio_query)
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => {
-                    let mut buffer = Vec::new();
-                    res.into_reader()
-                        .read_to_end(&mut buffer)
-                        .map_err(|_| AccentPhrasesErrors::IO)?;
-                    Ok(buffer)
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
                 }
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
-                }
-            }
-        })
+            })
     }
 }
 
@@ -752,61 +565,50 @@ impl Api for SynthesisMorphing {
 ///
 pub struct GuidedSynthesis {
     // in query
-    pub(crate) core_version: Option<String>,
+    pub(crate) core_version: CoreVersion,
     // in form.
     pub(crate) form_data: crate::api_schema::GuidedSynthesisFormData,
 }
 
 impl Api for GuidedSynthesis {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::post("http://localhost:50021/guided_synthesis");
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .send_form(
-            &self
-                .form_data
-                .build_form()
-                .iter()
-                .map(|(k, v)| (*k, v.as_str()))
-                .collect::<Vec<(&str, &str)>>(),
-        )
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => {
-                    let mut buffer = Vec::new();
-                    res.into_reader()
-                        .read_to_end(&mut buffer)
-                        .map_err(|_| AccentPhrasesErrors::IO)?;
-                    Ok(buffer)
+        ureq::post("http://localhost:50021/guided_synthesis")
+            .add_core_version(&self.core_version)
+            .send_form(
+                &self
+                    .form_data
+                    .build_form()
+                    .iter()
+                    .map(|(k, v)| (*k, v.as_str()))
+                    .collect::<Vec<(&str, &str)>>(),
+            )
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => {
+                        let mut buffer = Vec::new();
+                        res.into_reader()
+                            .read_to_end(&mut buffer)
+                            .map_err(|e| APIError::Io(e))?;
+                        Ok(buffer)
+                    }
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
                 }
-            }
-        })
+            })
     }
 }
 
@@ -818,7 +620,7 @@ pub struct ConnectWaves {
 }
 
 impl Api for ConnectWaves {
-    type Response = Result<Vec<u8>, AccentPhrasesErrors>;
+    type Response = Result<Vec<u8>, APIError>;
 
     fn call(&self) -> Self::Response {
         let mut buffer = Vec::new();
@@ -831,7 +633,11 @@ impl Api for ConnectWaves {
             .send_json(buffer)
             .map_err(|e| {
                 log::error!("{:?}", e);
-                AccentPhrasesErrors::IO
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
+                }
             })
             .and_then(|res| {
                 let status = res.status();
@@ -841,22 +647,12 @@ impl Api for ConnectWaves {
                         let mut buffer = Vec::new();
                         res.into_reader()
                             .read_to_end(&mut buffer)
-                            .map_err(|_| AccentPhrasesErrors::IO)?;
+                            .map_err(|e| APIError::Io(e))?;
                         Ok(buffer)
                     }
-                    422 => res
-                        .into_string()
-                        .map_err(|e| {
-                            log::error!("{}", e);
-                            AccentPhrasesErrors::IO
-                        })
-                        .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                            Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                            _ => Err(AccentPhrasesErrors::Unknown),
-                        }),
                     x => {
                         log::error!("http status code {}", x);
-                        Err(AccentPhrasesErrors::Unknown)
+                        Err(APIError::Unknown)
                     }
                 }
             })
@@ -865,23 +661,17 @@ impl Api for ConnectWaves {
 
 pub struct Presets;
 
-#[derive(Debug)]
-pub enum PresetsError {
-    UREQ_IO,
-    InvalidJSON,
-}
-
 impl Api for Presets {
-    type Response = Result<Vec<crate::api_schema::Preset>, PresetsError>;
+    type Response = Result<Vec<crate::api_schema::Preset>, APIError>;
 
     fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/presets")
             .call()
-            .map_err(|_| PresetsError::UREQ_IO)
+            .map_err(|e| APIError::Ureq(e))
             .and_then(|response| {
                 response
                     .into_json::<Vec<crate::api_schema::Preset>>()
-                    .map_err(|_| PresetsError::InvalidJSON)
+                    .map_err(|e| APIError::Io(e))
             })
     }
 }
@@ -896,23 +686,17 @@ fn call_presets() {
 
 pub struct Version;
 
-#[derive(Debug)]
-pub enum VersionError {
-    UREQ_IO,
-    InvalidJSON,
-}
-
 impl Api for Version {
-    type Response = Result<Option<String>, VersionError>;
+    type Response = Result<Option<String>, APIError>;
 
     fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/version")
             .call()
-            .map_err(|_| VersionError::UREQ_IO)
+            .map_err(|e| APIError::Ureq(e))
             .and_then(|response| {
                 response
                     .into_json::<Option<String>>()
-                    .map_err(|_| VersionError::InvalidJSON)
+                    .map_err(|e| APIError::Io(e))
             })
     }
 }
@@ -925,23 +709,17 @@ fn call_version() {
 
 pub struct CoreVersions;
 
-#[derive(Debug)]
-pub enum CoreVersionError {
-    UREQ_IO,
-    InvalidJSON,
-}
-
 impl Api for CoreVersions {
-    type Response = Result<Vec<String>, VersionError>;
+    type Response = Result<Vec<String>, APIError>;
 
     fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/core_versions")
             .call()
-            .map_err(|_| VersionError::UREQ_IO)
+            .map_err(|e| APIError::Ureq(e))
             .and_then(|response| {
                 response
                     .into_json::<Vec<String>>()
-                    .map_err(|_| VersionError::InvalidJSON)
+                    .map_err(|e| APIError::Io(e))
             })
     }
 }
@@ -953,48 +731,37 @@ fn call_core_versions() {
 }
 
 pub struct Speakers {
-    core_version: Option<String>,
+    core_version: CoreVersion,
 }
 
 impl Api for Speakers {
-    type Response = Result<Vec<crate::api_schema::Speaker>, AccentPhrasesErrors>;
+    type Response = Result<Vec<crate::api_schema::Speaker>, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::get("http://localhost:50021/speakers");
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .call()
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_json::<Vec<crate::api_schema::Speaker>>()
-                    .map_err(|_| AccentPhrasesErrors::IO),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::get("http://localhost:50021/speakers")
+            .add_core_version(&self.core_version)
+            .call()
+            .map_err(|e| {
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res
+                        .into_json::<Vec<crate::api_schema::Speaker>>()
+                        .map_err(|e| APIError::Io(e)),
+
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -1006,66 +773,55 @@ fn call_speakers() {
 
 pub struct SpeakerInfo {
     speaker_uuid: String,
-    core_version: Option<String>,
+    core_version: CoreVersion,
 }
 
 impl Api for SpeakerInfo {
-    type Response = Result<crate::api_schema::SpeakerInfo, AccentPhrasesErrors>;
+    type Response = Result<crate::api_schema::SpeakerInfo, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::get("http://localhost:50021/speaker_info")
-            .query("speaker_uuid", &self.speaker_uuid);
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .call()
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_json::<crate::api_schema::SpeakerInfoRaw>()
-                    .map_err(|_| AccentPhrasesErrors::IO)
-                    .map(|raw| crate::api_schema::SpeakerInfo {
-                        policy: raw.policy.clone(),
-                        portrait: base64::decode(&raw.portrait).unwrap_or_default(),
-                        style_infos: raw
-                            .style_infos
-                            .iter()
-                            .map(|raw| crate::api_schema::StyleInfo {
-                                id: raw.id,
-                                icon: base64::decode(&raw.icon).unwrap_or_default(),
-                                voice_samples: raw
-                                    .voice_samples
-                                    .iter()
-                                    .map(|raw| base64::decode(raw).unwrap_or_default())
-                                    .collect(),
-                            })
-                            .collect(),
-                    }),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::get("http://localhost:50021/speaker_info")
+            .query("speaker_uuid", &self.speaker_uuid)
+            .add_core_version(&self.core_version)
+            .call()
+            .map_err(|e| {
+                log::error!("{:?}", e);
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res
+                        .into_json::<crate::api_schema::SpeakerInfoRaw>()
+                        .map_err(|e| APIError::Io(e))
+                        .map(|raw| crate::api_schema::SpeakerInfo {
+                            policy: raw.policy.clone(),
+                            portrait: base64::decode(&raw.portrait).unwrap_or_default(),
+                            style_infos: raw
+                                .style_infos
+                                .iter()
+                                .map(|raw| crate::api_schema::StyleInfo {
+                                    id: raw.id,
+                                    icon: base64::decode(&raw.icon).unwrap_or_default(),
+                                    voice_samples: raw
+                                        .voice_samples
+                                        .iter()
+                                        .map(|raw| base64::decode(raw).unwrap_or_default())
+                                        .collect(),
+                                })
+                                .collect(),
+                        }),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -1081,48 +837,36 @@ fn call_speaker_info() {
 }
 
 pub struct SupportedDevices {
-    core_version: Option<String>,
+    core_version: CoreVersion,
 }
 
 impl Api for SupportedDevices {
-    type Response = Result<crate::api_schema::SupportedDevices, AccentPhrasesErrors>;
+    type Response = Result<crate::api_schema::SupportedDevices, APIError>;
 
     fn call(&self) -> Self::Response {
-        let query = ureq::get("http://localhost:50021/supported_devices");
-
-        if let Some(cv) = &self.core_version {
-            query.query("core_version", cv)
-        } else {
-            query
-        }
-        .call()
-        .map_err(|e| {
-            log::error!("{:?}", e);
-            AccentPhrasesErrors::IO
-        })
-        .and_then(|res| {
-            let status = res.status();
-            log::debug!("{}", status);
-            match status {
-                200 => res
-                    .into_json::<crate::api_schema::SupportedDevices>()
-                    .map_err(|_| AccentPhrasesErrors::IO),
-                422 => res
-                    .into_string()
-                    .map_err(|e| {
-                        log::error!("{}", e);
-                        AccentPhrasesErrors::IO
-                    })
-                    .and_then(|x| match serde_json::from_str::<HttpValidationError>(&x) {
-                        Ok(e) => Err(AccentPhrasesErrors::Validation(e)),
-                        _ => Err(AccentPhrasesErrors::Unknown),
-                    }),
-                x => {
-                    log::error!("http status code {}", x);
-                    Err(AccentPhrasesErrors::Unknown)
+        ureq::get("http://localhost:50021/supported_devices")
+            .add_core_version(&self.core_version)
+            .call()
+            .map_err(|e| {
+                if let ureq::Error::Status(422, res) = e {
+                    gen_http_validation_error(res)
+                } else {
+                    APIError::Ureq(e)
                 }
-            }
-        })
+            })
+            .and_then(|res| {
+                let status = res.status();
+                log::debug!("{}", status);
+                match status {
+                    200 => res
+                        .into_json::<crate::api_schema::SupportedDevices>()
+                        .map_err(|e| APIError::Io(e)),
+                    x => {
+                        log::error!("http status code {}", x);
+                        Err(APIError::Unknown)
+                    }
+                }
+            })
     }
 }
 
@@ -1130,4 +874,33 @@ impl Api for SupportedDevices {
 fn call_supported_devices() {
     let supported_devices = SupportedDevices { core_version: None };
     println!("{:?}", supported_devices.call().unwrap());
+}
+
+fn gen_http_validation_error(res: ureq::Response) -> APIError {
+    match res.into_json::<HttpValidationError>() {
+        Ok(error_detail) => APIError::Validation(error_detail),
+        Err(e) => APIError::Io(e),
+    }
+}
+
+pub trait AddCoreVersion {
+    fn add_core_version(self, core_version: &CoreVersion) -> Self;
+}
+
+impl AddCoreVersion for ureq::Request {
+    fn add_core_version(self, core_version: &CoreVersion) -> Self {
+        if let Some(cv) = &core_version {
+            self.query("core_version", cv)
+        } else {
+            self
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum APIError {
+    Validation(HttpValidationError),
+    Io(std::io::Error),
+    Ureq(ureq::Error),
+    Unknown,
 }
