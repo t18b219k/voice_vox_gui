@@ -1,4 +1,4 @@
-use eframe::egui::{Color32, Context, FontFamily, Layout};
+use eframe::egui::{Align2, Color32, Context, FontFamily, Layout, Vec2};
 use eframe::epi::{App, Frame, Storage};
 use eframe::NativeOptions;
 
@@ -19,6 +19,7 @@ struct VoiceVoxRust {
     tool_bar_config_editing: Vec<ToolBarOp>,
     cursoring: usize,
     block_menu_control: bool,
+    dialog_opening: bool,
 }
 
 enum CurrentView {
@@ -43,6 +44,7 @@ impl VoiceVoxRust {
             tool_bar_config_editing: vec![],
             cursoring: 0,
             block_menu_control: false,
+            dialog_opening: false,
         }
     }
 }
@@ -126,105 +128,163 @@ impl App for VoiceVoxRust {
             }
             CurrentView::ToolBarCustomize => {
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
-                    ui.vertical(|ui| {
+                    ui.add_enabled_ui(!self.dialog_opening, |ui| {
                         ui.vertical(|ui| {
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new("ツールバーのカスタマイズ").size(28.0),
-                                );
-                                let restore_default = egui::Button::new(
-                                    egui::RichText::new("デフォルトに戻す").size(28.0),
-                                );
-                                let is_default = vec![
-                                    ToolBarOp::PlayAll,
-                                    ToolBarOp::Stop,
-                                    ToolBarOp::ExportSelected,
-                                    ToolBarOp::Blank,
-                                    ToolBarOp::Undo,
-                                    ToolBarOp::Redo,
-                                ] != self.tool_bar_config_editing;
-                                let changed = self.tool_bar_config_editing != self.tool_bar_config;
-                                let save_config =
-                                    egui::Button::new(egui::RichText::new("保存").size(28.0));
-                                let exit = egui::Button::new(egui::RichText::new("X").size(28.0))
-                                    .fill(Color32::TRANSPARENT);
-                                ui.with_layout(Layout::right_to_left(), |ui| {
-                                    if ui.add(exit).clicked() {
-                                        self.block_menu_control = false;
-                                        self.current_view = CurrentView::Main;
-                                    }
-                                    if ui.add_enabled(changed, save_config).clicked() {
-                                        self.tool_bar_config = self.tool_bar_config_editing.clone();
-                                    }
-                                    if ui.add_enabled(is_default, restore_default).clicked() {
-                                        self.tool_bar_config = vec![
-                                            ToolBarOp::PlayAll,
-                                            ToolBarOp::Stop,
-                                            ToolBarOp::ExportSelected,
-                                            ToolBarOp::Blank,
-                                            ToolBarOp::Undo,
-                                            ToolBarOp::Redo,
-                                        ];
-                                    }
+                            ui.vertical(|ui| {
+                                ui.horizontal(|ui| {
+                                    ui.label(
+                                        egui::RichText::new("ツールバーのカスタマイズ").size(28.0),
+                                    );
+                                    let restore_default = egui::Button::new(
+                                        egui::RichText::new("デフォルトに戻す").size(28.0),
+                                    );
+                                    let is_default = vec![
+                                        ToolBarOp::PlayAll,
+                                        ToolBarOp::Stop,
+                                        ToolBarOp::ExportSelected,
+                                        ToolBarOp::Blank,
+                                        ToolBarOp::Undo,
+                                        ToolBarOp::Redo,
+                                    ] != self.tool_bar_config_editing;
+                                    let changed =
+                                        self.tool_bar_config_editing != self.tool_bar_config;
+                                    let save_config =
+                                        egui::Button::new(egui::RichText::new("保存").size(28.0));
+                                    let exit =
+                                        egui::Button::new(egui::RichText::new("X").size(28.0))
+                                            .fill(Color32::TRANSPARENT);
+                                    ui.with_layout(Layout::right_to_left(), |ui| {
+                                        if ui.add(exit).clicked() {
+                                            if self.tool_bar_config != self.tool_bar_config_editing
+                                            {
+                                                self.dialog_opening = true;
+                                            } else {
+                                                self.block_menu_control = false;
+                                                self.current_view = CurrentView::Main;
+                                            }
+                                        }
+
+                                        if ui.add_enabled(changed, save_config).clicked() {
+                                            self.tool_bar_config =
+                                                self.tool_bar_config_editing.clone();
+                                        }
+                                        if ui.add_enabled(is_default, restore_default).clicked() {
+                                            self.tool_bar_config_editing = vec![
+                                                ToolBarOp::PlayAll,
+                                                ToolBarOp::Stop,
+                                                ToolBarOp::ExportSelected,
+                                                ToolBarOp::Blank,
+                                                ToolBarOp::Undo,
+                                                ToolBarOp::Redo,
+                                            ];
+                                        }
+                                    });
                                 });
-                            });
 
-                            let op = crate::tool_bar::tool_bar(
-                                ui,
-                                &self.tool_bar_config_editing,
-                                28.0,
-                                true,
-                            );
-
-                            if let Some(op) = op {
-                                self.cursoring = self
-                                    .tool_bar_config_editing
-                                    .iter()
-                                    .enumerate()
-                                    .find(|(_, x)| **x == op)
-                                    .map(|x| x.0)
-                                    .unwrap()
-                            }
-                            let index = self.cursoring;
-                            let op = self.tool_bar_config_editing[index];
-                            let text = &crate::tool_bar::TOOL_BAR_OPS[&op];
-                            ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(format!("「{}」を選択中", text))
-                                        .size(28.0)
-                                        .monospace(),
+                                let op = crate::tool_bar::tool_bar(
+                                    ui,
+                                    &self.tool_bar_config_editing,
+                                    28.0,
+                                    true,
                                 );
-                                let move_left =
-                                    egui::Button::new(egui::RichText::new("左に動かす").size(28.0));
-                                let move_right =
-                                    egui::Button::new(egui::RichText::new("右に動かす").size(28.0));
 
-                                ui.with_layout(Layout::right_to_left(), |ui| {
-                                    if ui
-                                        .button(egui::RichText::new("削除する").size(28.0))
-                                        .clicked()
-                                    {
-                                        self.tool_bar_config_editing.remove(index);
-                                    };
-                                    if ui
-                                        .add_enabled(
-                                            index + 1 != self.tool_bar_config_editing.len(),
-                                            move_right,
-                                        )
-                                        .clicked()
-                                    {
-                                        self.cursoring += 1;
-                                        self.tool_bar_config_editing.swap(index, index + 1);
+                                if let Some(op) = op {
+                                    self.cursoring = self
+                                        .tool_bar_config_editing
+                                        .iter()
+                                        .enumerate()
+                                        .find(|(_, x)| **x == op)
+                                        .map(|x| x.0)
+                                        .unwrap()
+                                }
+                                let index = if self.cursoring >= self.tool_bar_config_editing.len()
+                                {
+                                    0
+                                } else {
+                                    self.cursoring
+                                };
+
+                                let text = self
+                                    .tool_bar_config_editing
+                                    .get(index)
+                                    .map(|op| &crate::tool_bar::TOOL_BAR_OPS[&op]);
+                                ui.horizontal(|ui| {
+                                    if let Some(text) = text {
+                                        ui.label(
+                                            egui::RichText::new(format!("「{}」を選択中", text))
+                                                .size(28.0)
+                                                .monospace(),
+                                        );
                                     }
-                                    if ui.add_enabled(index != 0, move_left).clicked() {
-                                        self.cursoring -= 1;
-                                        self.tool_bar_config_editing.swap(index, index - 1);
-                                    }
+                                    let move_left = egui::Button::new(
+                                        egui::RichText::new("左に動かす").size(28.0),
+                                    );
+                                    let move_right = egui::Button::new(
+                                        egui::RichText::new("右に動かす").size(28.0),
+                                    );
+
+                                    ui.with_layout(Layout::right_to_left(), |ui| {
+                                        if ui
+                                            .button(egui::RichText::new("削除する").size(28.0))
+                                            .clicked()
+                                        {
+                                            self.tool_bar_config_editing.remove(index);
+                                        };
+                                        if ui
+                                            .add_enabled(
+                                                index + 1 != self.tool_bar_config_editing.len(),
+                                                move_right,
+                                            )
+                                            .clicked()
+                                        {
+                                            self.cursoring += 1;
+                                            self.tool_bar_config_editing.swap(index, index + 1);
+                                        }
+                                        if ui.add_enabled(index != 0, move_left).clicked() {
+                                            self.cursoring -= 1;
+                                            self.tool_bar_config_editing.swap(index, index - 1);
+                                        }
+                                    });
                                 });
                             });
                         });
                     });
                 });
+                if self.dialog_opening {
+                    egui::containers::Window::new("exit_customize")
+                        .title_bar(false)
+                        .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
+                        .resizable(false)
+                        .show(ctx, |ui| {
+
+                            let h = ui
+                                .label(
+                                    egui::RichText::new("カスタマイズを放棄しますか")
+                                        .size(28.0)
+                                        .strong(),
+                                )
+                                .rect
+                                .height();
+                            ui.set_height(h * 3.0);
+                            ui.add_space(h);
+                            ui.label(
+                                "このまま終了すると,カスタマイズは放棄されてリセットされます.",
+                            );
+                            ui.with_layout(Layout::right_to_left(), |ui| {
+                                if ui.button(egui::RichText::new("終了").size(28.0)).clicked() {
+                                    self.dialog_opening = false;
+                                    self.block_menu_control = false;
+                                    self.current_view = CurrentView::Main;
+                                }
+                                if ui
+                                    .button(egui::RichText::new("キャンセル").size(28.0))
+                                    .clicked()
+                                {
+                                    self.dialog_opening = false;
+                                }
+                            });
+                        });
+                }
             }
         }
     }
