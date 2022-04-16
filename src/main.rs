@@ -5,6 +5,7 @@ use eframe::NativeOptions;
 mod api;
 mod api_schema;
 mod context_menu;
+mod dialogue;
 mod menu;
 mod project;
 mod tool_bar;
@@ -48,6 +49,7 @@ impl VoiceVoxRust {
         }
     }
 }
+use crate::dialogue::ExitControl;
 use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
 use crate::tool_bar::ToolBarOp;
@@ -251,38 +253,25 @@ impl App for VoiceVoxRust {
                     });
                 });
                 if self.dialog_opening {
-                    egui::containers::Window::new("exit_customize")
-                        .title_bar(false)
-                        .anchor(Align2::CENTER_CENTER, Vec2::new(0.0, 0.0))
-                        .resizable(false)
-                        .show(ctx, |ui| {
-                            let h = ui
-                                .label(
-                                    egui::RichText::new("カスタマイズを放棄しますか")
-                                        .size(28.0)
-                                        .strong(),
-                                )
-                                .rect
-                                .height();
-                            ui.set_height(h * 3.0);
-                            ui.add_space(h);
-                            ui.label(
-                                "このまま終了すると,カスタマイズは放棄されてリセットされます.",
-                            );
-                            ui.with_layout(Layout::right_to_left(), |ui| {
-                                if ui.button(egui::RichText::new("終了").size(28.0)).clicked() {
-                                    self.dialog_opening = false;
-                                    self.block_menu_control = false;
-                                    self.current_view = CurrentView::Main;
-                                }
-                                if ui
-                                    .button(egui::RichText::new("キャンセル").size(28.0))
-                                    .clicked()
-                                {
-                                    self.dialog_opening = false;
-                                }
-                            });
-                        });
+                    let mut cell: Option<bool> = None;
+                    let dialogue = dialogue::Dialogue {
+                        title: "カスタマイズを放棄しますか",
+                        text: "このまま終了すると,カスタマイズは放棄されてリセットされます.",
+                        control_constructor: Box::new(ExitControl {}),
+                        cell: Some(&mut cell),
+                    };
+                    dialogue.show(ctx);
+                    match cell {
+                        Some(true) => {
+                            self.dialog_opening = false;
+                            self.block_menu_control = false;
+                            self.current_view = CurrentView::Main;
+                        }
+                        Some(false) => {
+                            self.dialog_opening = false;
+                        }
+                        _ => {}
+                    }
                 }
             }
         }

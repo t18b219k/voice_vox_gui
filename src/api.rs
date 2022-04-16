@@ -5,8 +5,7 @@
 use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
 use crate::DEPTH;
 
-use eframe::egui::Response;
-use std::io::{Error, Read};
+use std::io::Read;
 use trace::trace;
 
 pub type CoreVersion = Option<String>;
