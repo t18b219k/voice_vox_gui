@@ -4,11 +4,20 @@
 
 use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
 use crate::DEPTH;
-
+use async_trait::async_trait;
+use once_cell::race::OnceBox;
+use reqwest::{Client, Error, Response, StatusCode};
 use std::io::Read;
 use trace::trace;
 
 pub type CoreVersion = Option<String>;
+
+static CLIENT: OnceBox<reqwest::Client> = once_cell::race::OnceBox::new();
+
+pub fn init() -> Result<(), Box<Client>> {
+    let client = reqwest::Client::new();
+    CLIENT.set(Box::new(client))
+}
 
 /// # 音声合成用のクエリを作成する
 ///
@@ -20,19 +29,11 @@ pub struct AudioQuery {
     pub(crate) speaker: i64,
     pub(crate) core_version: Option<String>,
 }
-
-#[derive(Debug)]
-pub enum AudioQueryErrors {
-    Validation(HttpValidationError),
-    CantParseBySerde,
-    Unknown,
-    IO,
-}
-
+#[async_trait]
 impl Api for AudioQuery {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
-    #[trace]
-    fn call(&self) -> Self::Response {
+
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/audio_query")
             .query("speaker", &self.speaker.to_string())
             .add_core_version(&self.core_version)
@@ -73,13 +74,11 @@ struct AudioQueryFromPreset {
     preset_id: i64,
     core_version: CoreVersion,
 }
-
-impl AudioQueryFromPreset {}
-
+#[async_trait]
 impl Api for AudioQueryFromPreset {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
-    #[trace]
-    fn call(&self) -> Self::Response {
+
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/audio_query")
             .query("preset_id", &self.preset_id.to_string())
             .add_core_version(&self.core_version)
@@ -109,10 +108,11 @@ impl Api for AudioQueryFromPreset {
     }
 }
 
+#[async_trait]
 pub trait Api {
     type Response;
 
-    fn call(&self) -> Self::Response;
+    async fn call(&self) -> Self::Response;
 }
 
 /// # テキストからアクセント句を得る
@@ -138,11 +138,11 @@ pub enum AccentPhrasesErrors {
     KanaParseError(KanaParseError),
     ApiError(APIError),
 }
-
+#[async_trait]
 impl Api for AccentPhrases {
     type Response = Result<AccentPhrasesResponse, AccentPhrasesErrors>;
-    #[trace]
-    fn call(&self) -> Self::Response {
+
+    async fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/audio_query")
             .query("speaker", &self.speaker.to_string())
             .add_core_version(&self.core_version);
@@ -198,10 +198,11 @@ pub struct GuidedAccentPhrase {
     audio_file: String,
     normalize: bool,
 }
+#[async_trait]
 impl Api for GuidedAccentPhrase {
     type Response = Result<Vec<AccentPhrase>, AccentPhrasesErrors>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/guided_accent_phrase");
 
         if let Some(cv) = &self.core_version {
@@ -248,11 +249,11 @@ pub struct MoraData {
     //in body
     accent_phrases: Vec<AccentPhrase>,
 }
-
+#[async_trait]
 impl Api for MoraData {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/guided_accent_phrase")
             .query("speaker", &self.speaker.to_string())
             .add_core_version(&self.core_version)
@@ -287,11 +288,11 @@ pub struct MoraLength {
     // in body.
     accent_phrases: Vec<AccentPhrase>,
 }
-
+#[async_trait]
 impl Api for MoraLength {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/mora_length")
             .query("speaker", &self.speaker.to_string())
             .add_core_version(&self.core_version)
@@ -326,13 +327,14 @@ pub struct MoraPitch {
     // in body.
     accent_phrases: Vec<AccentPhrase>,
 }
-
+#[async_trait]
 impl Api for MoraPitch {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/mora_pitch")
             .query("speaker", &self.speaker.to_string())
+            .add_core_version(&self.core_version)
             .send_json(&self.accent_phrases)
             .map_err(|e| {
                 log::error!("{:?}", e);
@@ -365,11 +367,11 @@ pub struct Synthesis {
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
-
+#[async_trait]
 impl Api for Synthesis {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/synthesis")
             .query("speaker", &self.speaker.to_string());
         if let Some(cv) = &self.enable_interrogative_upspeak {
@@ -416,11 +418,11 @@ pub struct CancellableSynthesis {
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
-
+#[async_trait]
 impl Api for CancellableSynthesis {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         let query = ureq::post("http://localhost:50021/cancellable_synthesis")
             .query("speaker", &self.speaker.to_string());
         if let Some(cv) = &self.enable_interrogative_upspeak {
@@ -469,11 +471,11 @@ pub struct MultiSynthesis {
     // in body json.
     pub(crate) audio_query: Vec<crate::api_schema::AudioQuery>,
 }
-
+#[async_trait]
 impl Api for MultiSynthesis {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/multi_synthesis")
             .query("speaker", &self.speaker.to_string())
             .add_core_version(&self.core_version)
@@ -518,11 +520,11 @@ pub struct SynthesisMorphing {
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
 }
-
+#[async_trait]
 impl Api for SynthesisMorphing {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/synthesis_morphing")
             .query("base_speaker", &self.base_speaker.to_string())
             .query("target_speaker", &self.target_speaker.to_string())
@@ -568,11 +570,11 @@ pub struct GuidedSynthesis {
     // in form.
     pub(crate) form_data: crate::api_schema::GuidedSynthesisFormData,
 }
-
+#[async_trait]
 impl Api for GuidedSynthesis {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::post("http://localhost:50021/guided_synthesis")
             .add_core_version(&self.core_version)
             .send_form(
@@ -617,15 +619,14 @@ impl Api for GuidedSynthesis {
 pub struct ConnectWaves {
     waves: Vec<Vec<u8>>,
 }
-
+#[async_trait]
 impl Api for ConnectWaves {
     type Response = Result<Vec<u8>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         let mut buffer = Vec::new();
         for wave in &self.waves {
-            let b64 = base64::encode(wave);
-            buffer.push(wave);
+            buffer.push(base64::encode(wave));
         }
 
         ureq::post("http://localhost:50021/connect_waves")
@@ -659,11 +660,11 @@ impl Api for ConnectWaves {
 }
 
 pub struct Presets;
-
+#[async_trait]
 impl Api for Presets {
     type Response = Result<Vec<crate::api_schema::Preset>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/presets")
             .call()
             .map_err(|e| APIError::Ureq(e))
@@ -675,20 +676,20 @@ impl Api for Presets {
     }
 }
 
-#[test]
-fn call_presets() {
+#[tokio::test]
+async fn call_presets() {
     let presets = Presets;
-    for preset in presets.call().unwrap() {
+    for preset in presets.call().await.unwrap() {
         println!("{:?}", preset);
     }
 }
 
 pub struct Version;
-
+#[async_trait]
 impl Api for Version {
     type Response = Result<Option<String>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/version")
             .call()
             .map_err(|e| APIError::Ureq(e))
@@ -700,18 +701,18 @@ impl Api for Version {
     }
 }
 
-#[test]
-fn call_version() {
+#[tokio::test]
+async fn call_version() {
     let version = Version;
-    println!("{:?}", version.call().unwrap());
+    println!("{:?}", version.call().await.unwrap());
 }
 
 pub struct CoreVersions;
-
+#[async_trait]
 impl Api for CoreVersions {
     type Response = Result<Vec<String>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/core_versions")
             .call()
             .map_err(|e| APIError::Ureq(e))
@@ -723,20 +724,20 @@ impl Api for CoreVersions {
     }
 }
 
-#[test]
-fn call_core_versions() {
+#[tokio::test]
+async fn call_core_versions() {
     let version = CoreVersions;
-    println!("{:?}", version.call().unwrap());
+    println!("{:?}", version.call().await.unwrap());
 }
 
 pub struct Speakers {
-    core_version: CoreVersion,
+    pub(crate) core_version: CoreVersion,
 }
-
+#[async_trait]
 impl Api for Speakers {
     type Response = Result<Vec<crate::api_schema::Speaker>, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/speakers")
             .add_core_version(&self.core_version)
             .call()
@@ -764,21 +765,21 @@ impl Api for Speakers {
     }
 }
 
-#[test]
-fn call_speakers() {
+#[tokio::test]
+async fn call_speakers() {
     let speakers = Speakers { core_version: None };
-    println!("{:?}", speakers.call().unwrap());
+    println!("{:?}", speakers.call().await.unwrap());
 }
 
 pub struct SpeakerInfo {
-    speaker_uuid: String,
-    core_version: CoreVersion,
+    pub(crate) speaker_uuid: String,
+    pub(crate) core_version: CoreVersion,
 }
-
+#[async_trait]
 impl Api for SpeakerInfo {
     type Response = Result<crate::api_schema::SpeakerInfo, APIError>;
 
-    fn call(&self) -> Self::Response {
+    async fn call(&self) -> Self::Response {
         ureq::get("http://localhost:50021/speaker_info")
             .query("speaker_uuid", &self.speaker_uuid)
             .add_core_version(&self.core_version)
@@ -824,55 +825,50 @@ impl Api for SpeakerInfo {
     }
 }
 
-#[test]
-fn call_speaker_info() {
+#[tokio::test]
+async fn call_speaker_info() {
     let speakers = Speakers { core_version: None };
-    let speakers = speakers.call().unwrap();
+    let speakers = speakers.call().await.unwrap();
     let info = SpeakerInfo {
         speaker_uuid: speakers[0].speaker_uuid.clone(),
         core_version: None,
     };
-    println!("{:?}", info.call());
+    println!("{:?}", info.call().await);
 }
 
 pub struct SupportedDevices {
     core_version: CoreVersion,
 }
-
+#[async_trait]
 impl Api for SupportedDevices {
-    type Response = Result<crate::api_schema::SupportedDevices, APIError>;
+    type Response = Result<crate::api_schema::SupportedDevices, APIErrorReqwest>;
 
-    fn call(&self) -> Self::Response {
-        ureq::get("http://localhost:50021/supported_devices")
+    async fn call(&self) -> Self::Response {
+        let cl = CLIENT.get().unwrap();
+        let request = cl
+            .get("http://localhost:50021/supported_devices")
             .add_core_version(&self.core_version)
-            .call()
-            .map_err(|e| {
-                if let ureq::Error::Status(422, res) = e {
-                    gen_http_validation_error(res)
-                } else {
-                    APIError::Ureq(e)
-                }
-            })
-            .and_then(|res| {
-                let status = res.status();
-                log::debug!("{}", status);
-                match status {
-                    200 => res
-                        .into_json::<crate::api_schema::SupportedDevices>()
-                        .map_err(|e| APIError::Io(e)),
-                    x => {
-                        log::error!("http status code {}", x);
-                        Err(APIError::Unknown)
-                    }
-                }
-            })
+            .build()
+            .unwrap();
+        let res = cl.execute(request).await.unwrap();
+        match res.status() {
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+                res.json::<crate::api_schema::HttpValidationError>().await?,
+            )),
+            StatusCode::OK => Ok(res.json::<crate::api_schema::SupportedDevices>().await?),
+            x => Err(x.into()),
+        }
     }
 }
 
-#[test]
-fn call_supported_devices() {
+use tokio::test;
+
+
+#[tokio::test]
+async fn call_supported_devices() {
+    init();
     let supported_devices = SupportedDevices { core_version: None };
-    println!("{:?}", supported_devices.call().unwrap());
+    println!("{:?}", supported_devices.call().await.unwrap());
 }
 
 fn gen_http_validation_error(res: ureq::Response) -> APIError {
@@ -896,10 +892,45 @@ impl AddCoreVersion for ureq::Request {
     }
 }
 
+impl AddCoreVersion for reqwest::RequestBuilder {
+    fn add_core_version(self, core_version: &CoreVersion) -> Self {
+        if let Some(cv) = &core_version {
+            self.query(&("core_version", cv))
+        }else{
+            self
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum APIError {
     Validation(HttpValidationError),
     Io(std::io::Error),
     Ureq(ureq::Error),
     Unknown,
+}
+
+#[derive(Debug)]
+pub enum APIErrorReqwest {
+    Validation(HttpValidationError),
+    Io(std::io::Error),
+    Reqwest(reqwest::Error),
+    Unknown,
+}
+
+impl From<reqwest::Error> for APIErrorReqwest {
+    fn from(e: Error) -> Self {
+        APIErrorReqwest::Reqwest(e)
+    }
+}
+
+impl Into<APIErrorReqwest> for std::io::Error {
+    fn into(self) -> APIErrorReqwest {
+        APIErrorReqwest::Io(self)
+    }
+}
+impl From<StatusCode> for APIErrorReqwest {
+    fn from(_: StatusCode) -> Self {
+        APIErrorReqwest::Unknown
+    }
 }

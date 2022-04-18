@@ -1,7 +1,5 @@
 use eframe::egui;
-use eframe::egui::{
-    Align2, Color32, Context, FontFamily, FontId, Layout, Response, Ui, Vec2, Widget,
-};
+use eframe::egui::{Align2, Color32, Context, FontFamily, FontId, Layout, Response, Vec2};
 
 pub trait DialogueSelectable<T: PartialEq + Clone> {
     /// layout of control.
@@ -11,19 +9,6 @@ pub trait DialogueSelectable<T: PartialEq + Clone> {
 
 pub struct ExitControl;
 
-impl ExitControl {
-    pub fn dialogue<'control>(
-        self,
-        cell: Option<&'control mut Option<bool>>,
-    ) -> Dialogue<'static, 'control, bool> {
-        Dialogue::<'static, 'control, bool> {
-            title: "",
-            text: "",
-            control_constructor: Box::new(self),
-            cell,
-        }
-    }
-}
 impl DialogueSelectable<bool> for ExitControl {
     fn layout(&self) -> Vec<Option<(bool, &str)>> {
         vec![Some((false, "キャンセル")), None, Some((true, "終了"))]

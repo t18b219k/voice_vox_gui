@@ -1,4 +1,4 @@
-use eframe::egui::{Align2, Color32, Context, FontFamily, Layout, Vec2};
+use eframe::egui::{Color32, Context, FontFamily, Layout};
 use eframe::epi::{App, Frame, Storage};
 use eframe::NativeOptions;
 
@@ -6,6 +6,7 @@ mod api;
 mod api_schema;
 mod context_menu;
 mod dialogue;
+mod left_pane;
 mod menu;
 mod project;
 mod tool_bar;
@@ -21,6 +22,7 @@ struct VoiceVoxRust {
     cursoring: usize,
     block_menu_control: bool,
     dialog_opening: bool,
+    left_pane: crate::left_pane::LeftPane,
 }
 
 enum CurrentView {
@@ -29,7 +31,12 @@ enum CurrentView {
 }
 
 impl VoiceVoxRust {
-    fn new() -> Self {
+    async fn new() -> Self {
+        let mut left_pane = crate::left_pane::LeftPane::new().await;
+        let name = left_pane.names().next();
+        if let Some(name) = name.cloned() {
+            left_pane.set_displaying_name(&name);
+        }
         Self {
             current_project: VoiceVoxProject {},
             opening_file: None,
@@ -46,6 +53,7 @@ impl VoiceVoxRust {
             cursoring: 0,
             block_menu_control: false,
             dialog_opening: false,
+            left_pane,
         }
     }
 }
@@ -56,25 +64,6 @@ use crate::tool_bar::ToolBarOp;
 use eframe::egui;
 
 impl App for VoiceVoxRust {
-    fn setup(&mut self, ctx: &Context, _frame: &Frame, _storage: Option<&dyn Storage>) {
-        let mut fonts = egui::FontDefinitions::default();
-        fonts
-            .families
-            .entry(FontFamily::Proportional)
-            .or_default()
-            .insert(0, "Noto".to_owned());
-        fonts
-            .families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, "Noto".to_owned());
-
-        fonts.font_data.insert(
-            "Noto".to_owned(),
-            egui::FontData::from_static(include_bytes!("../resources/NotoSansJP-Regular.otf")),
-        );
-        ctx.set_fonts(fonts);
-    }
     fn update(&mut self, ctx: &Context, frame: &Frame) {
         frame.set_window_title(&format!(
             "{} VoiceVox",
@@ -117,14 +106,15 @@ impl App for VoiceVoxRust {
         }
         match self.current_view {
             CurrentView::Main => {
-                egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |ui| {});
+                egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |_ui| {});
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical(|ui| {
                         crate::tool_bar::tool_bar(ui, &self.tool_bar_config, 28.0, false);
-                        egui::containers::SidePanel::left("chara_view").show_inside(ui, |ui| {});
-                        egui::containers::CentralPanel::default().show_inside(ui, |ui| {});
+                        egui::containers::SidePanel::left("chara_view")
+                            .show_inside(ui, |ui| self.left_pane.render_left_pane(ui));
+                        egui::containers::CentralPanel::default().show_inside(ui, |_ui| {});
                         egui::containers::SidePanel::right("parameter_control")
-                            .show_inside(ui, |ui| {});
+                            .show_inside(ui, |_ui| {});
                     });
                 });
             }
@@ -276,16 +266,36 @@ impl App for VoiceVoxRust {
             }
         }
     }
+    fn setup(&mut self, ctx: &Context, _frame: &Frame, _storage: Option<&dyn Storage>) {
+        let mut fonts = egui::FontDefinitions::default();
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .insert(0, "Noto".to_owned());
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .insert(0, "Noto".to_owned());
+
+        fonts.font_data.insert(
+            "Noto".to_owned(),
+            egui::FontData::from_static(include_bytes!("../resources/NotoSansJP-Regular.otf")),
+        );
+        ctx.set_fonts(fonts);
+    }
 
     fn name(&self) -> &str {
         "VoiceVox"
     }
 }
-fn main() {
+#[tokio::main]
+async fn main() {
     simple_log::console("debug").unwrap();
-
+    api::init();
     eframe::run_native(
-        Box::new(VoiceVoxRust::new()),
+        Box::new(VoiceVoxRust::new().await),
         NativeOptions {
             always_on_top: false,
             maximized: false,

@@ -121,10 +121,10 @@ pub struct Preset {
 
 #[derive(Deserialize, Debug)]
 pub struct Speaker {
-    name: String,
+    pub name: String,
     pub(crate) speaker_uuid: String,
-    styles: Vec<SpeakerStyle>,
-    version: Option<String>,
+    pub styles: Vec<SpeakerStyle>,
+    pub version: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -155,7 +155,7 @@ pub struct StyleInfoRaw {
 pub struct SpeakerInfo {
     /// markdown format.
     pub(crate) policy: String,
-    ///png file.
+    /// base64 encoded png file.
     pub(crate) portrait: Vec<u8>,
     pub(crate) style_infos: Vec<StyleInfo>,
 }
@@ -163,7 +163,7 @@ pub struct SpeakerInfo {
 #[derive(Deserialize, Debug)]
 pub struct StyleInfo {
     pub(crate) id: i64,
-    ///
+    ///png file
     pub(crate) icon: Vec<u8>,
     ///wav file
     pub(crate) voice_samples: Vec<Vec<u8>>,
