@@ -78,7 +78,7 @@ impl GuidedSynthesisFormData {
 #[allow(non_snake_case)]
 #[derive(Deserialize, Debug)]
 pub struct HttpValidationError {
-    Detail: Vec<ValidationError>,
+    detail: Vec<ValidationError>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -130,7 +130,7 @@ pub struct Speaker {
 #[derive(Deserialize, Debug)]
 pub struct SpeakerStyle {
     name: String,
-    id: i64,
+    pub(crate) id: i64,
 }
 
 #[derive(Debug, Deserialize)]
