@@ -1,9 +1,9 @@
-use eframe::egui;
-use eframe::egui::{Context, Ui};
-use std::collections::HashMap;
-
 use crate::api;
 use crate::api::Api;
+use eframe::egui;
+use eframe::egui::{Layout, Ui};
+use egui::Context;
+use std::collections::HashMap;
 
 pub(crate) static ICON_AND_PORTRAIT_STORE: once_cell::race::OnceBox<
     HashMap<(String, String), egui_extras::RetainedImage>,
@@ -70,26 +70,17 @@ async fn test_init_icon_store() {
     ICON_AND_PORTRAIT_STORE.get().unwrap();
 }
 
-pub struct CharaChangeButton<'a, 'notify> {
+pub struct CharaChangeButton<'a> {
     current_character: (&'a str, &'a str),
-    notify: &'notify mut Option<usize>,
-    id: usize,
 }
 
-impl<'a, 'notify> CharaChangeButton<'a, 'notify> {
+impl<'a> CharaChangeButton<'a> {
     ///
     /// notify はいま開いているボタンを通知するために使用する.
     ///
-    pub fn new(
-        character: &'a str,
-        style: &'a str,
-        notify: &'notify mut Option<usize>,
-        id: usize,
-    ) -> Self {
+    pub fn new(character: &'a str, style: &'a str) -> Self {
         Self {
             current_character: (character, style),
-            notify,
-            id,
         }
     }
     pub fn ui(&mut self, ui: &mut Ui, ctx: &Context) -> Option<(&'a str, &'a str)> {
@@ -100,48 +91,41 @@ impl<'a, 'notify> CharaChangeButton<'a, 'notify> {
             self.current_character.0.to_owned(),
             self.current_character.1.to_owned(),
         ))?;
-        let image_button =
-            egui::ImageButton::new(image_ref.texture_id(ctx), egui::epaint::vec2(32.0, 32.0));
+        ui.menu_image_button(
+            self.current_character.0,
+            image_ref.texture_id(ctx),
+            egui::vec2(32.0, 32.0),
+            |ui| {
+                for (character, styles) in style_structure {
+                    if let Some(default_style) = styles.get(0) {
+                        ui.horizontal(|ui| {
+                            if let Some(default_icon) =
+                                image.get(&(character.clone(), default_style.clone()))
+                            {
+                                let default_style_button = egui::Button::image_and_text(
+                                    default_icon.texture_id(ctx),
+                                    egui::epaint::vec2(32.0, 32.0),
+                                    character,
+                                );
 
-        if ui.add(image_button).clicked() {
-            *self.notify = Some(self.id);
-        }
-
-        if *self.notify == Some(self.id) {
-            let style = ui.style();
-            let frame = egui::containers::Frame::menu(&style);
-            frame.show(ui, |ui| {
-                ui.vertical(|ui| {
-                    for (character, styles) in style_structure {
-                        if let Some(default_style) = styles.get(0) {
-                            ui.horizontal(|ui| {
-                                if let Some(default_icon) =
-                                    image.get(&(character.clone(), default_style.clone()))
-                                {
-                                    let default_style_button = egui::Button::image_and_text(
-                                        default_icon.texture_id(ctx),
-                                        egui::epaint::vec2(32.0, 32.0),
-                                        character,
+                                if ui.add(default_style_button).clicked() {
+                                    log::debug!(
+                                        "emit character select ({},{})",
+                                        &character,
+                                        &default_style
                                     );
+                                    rt = Some((character.as_str(), default_style.as_str()));
+                                }
 
-                                    if ui.add(default_style_button).clicked() {
-                                        log::debug!(
-                                            "emit character select ({},{})",
-                                            &character,
-                                            &default_style
-                                        );
-                                        rt = Some((character.as_str(), default_style.as_str()));
-                                    }
-
-                                    if styles.len() > 1 {
-                                        ui.separator();
-                                        ui.menu_button(">", |ui| {
+                                if styles.len() > 1 {
+                                    ui.with_layout(Layout::right_to_left(), |ui| {
+                                        ui.menu_button("", |ui| {
                                             for style in styles {
-                                                if let Some(_style_icon) =
+                                                if let Some(style_icon) =
                                                     image.get(&(character.clone(), style.clone()))
                                                 {
                                                     let style_button = egui::Button::image_and_text(
-                                                        default_icon.texture_id(ctx),
+                                                        style_icon.texture_id(ctx),
                                                         egui::epaint::vec2(32.0, 32.0),
                                                         format!("{}({})", character, style),
                                                     );
@@ -159,14 +143,16 @@ impl<'a, 'notify> CharaChangeButton<'a, 'notify> {
                                                 }
                                             }
                                         });
-                                    }
+                                        ui.separator();
+                                    });
                                 }
-                            });
-                        }
+                            }
+                        });
                     }
-                });
-            });
-        };
+                }
+            },
+        );
+
         rt
     }
 }

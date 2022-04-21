@@ -1,6 +1,6 @@
 use eframe::egui::{Color32, Context, FontFamily, Layout};
-use eframe::epi::{App, Frame, Storage};
-use eframe::NativeOptions;
+use eframe::epi::{Frame, Storage};
+use eframe::{CreationContext, NativeOptions};
 
 mod api;
 mod api_schema;
@@ -26,7 +26,6 @@ struct VoiceVoxRust {
     cursoring: usize,
     block_menu_control: bool,
     opening_dialogues: Option<DialogueKind>,
-    opening_chara_change_button: Option<usize>,
     current_selected_tts_line: usize,
     tts_lines: Vec<TTS>,
 }
@@ -54,13 +53,32 @@ impl VoiceVoxRust {
             cursoring: 0,
             block_menu_control: false,
             opening_dialogues: None,
-            opening_chara_change_button: None,
             current_selected_tts_line: 0,
             tts_lines: vec![TTS {
                 character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
                 text: "".to_string(),
             }],
         }
+    }
+    fn setup(&mut self, cc: &CreationContext) {
+        let mut fonts = egui::FontDefinitions::default();
+        fonts
+            .families
+            .entry(FontFamily::Proportional)
+            .or_default()
+            .insert(0, "Noto".to_owned());
+        fonts
+            .families
+            .entry(FontFamily::Monospace)
+            .or_default()
+            .insert(0, "Noto".to_owned());
+
+        fonts.font_data.insert(
+            "Noto".to_owned(),
+            egui::FontData::from_static(include_bytes!("../resources/NotoSansJP-Regular.otf")),
+        );
+
+        cc.egui_ctx.set_fonts(fonts);
     }
 }
 use crate::dialogue::ExitControl;
@@ -74,8 +92,8 @@ struct TTS {
     text: String,
 }
 
-impl App for VoiceVoxRust {
-    fn update(&mut self, ctx: &Context, frame: &Frame) {
+impl eframe::App for VoiceVoxRust {
+    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
         frame.set_window_title(&format!(
             "{} VoiceVox",
             self.opening_file.as_ref().unwrap_or(&"*".to_owned())
@@ -140,8 +158,6 @@ impl App for VoiceVoxRust {
                                     let mut ccb = chara_change_button::CharaChangeButton::new(
                                         &tts_line.character_and_style.0,
                                         &tts_line.character_and_style.1,
-                                        &mut self.opening_chara_change_button,
-                                        0,
                                     );
                                     let chara_change_notify = ccb.ui(ui, ctx);
                                     ui.text_edit_singleline(&mut tts_line.text);
@@ -332,49 +348,20 @@ impl App for VoiceVoxRust {
             }
         }
     }
-    fn setup(&mut self, ctx: &Context, _frame: &Frame, _storage: Option<&dyn Storage>) {
-        let mut fonts = egui::FontDefinitions::default();
-        fonts
-            .families
-            .entry(FontFamily::Proportional)
-            .or_default()
-            .insert(0, "Noto".to_owned());
-        fonts
-            .families
-            .entry(FontFamily::Monospace)
-            .or_default()
-            .insert(0, "Noto".to_owned());
-
-        fonts.font_data.insert(
-            "Noto".to_owned(),
-            egui::FontData::from_static(include_bytes!("../resources/NotoSansJP-Regular.otf")),
-        );
-        ctx.set_fonts(fonts);
-    }
-
-    fn name(&self) -> &str {
-        "VoiceVox"
-    }
 }
 #[tokio::main]
 async fn main() {
     simple_log::console("debug").unwrap();
     api::init();
     chara_change_button::init_icon_store().await;
+    let mut app = VoiceVoxRust::new().await;
+
     eframe::run_native(
-        Box::new(VoiceVoxRust::new().await),
-        NativeOptions {
-            always_on_top: false,
-            maximized: false,
-            decorated: true,
-            drag_and_drop_support: true,
-            icon_data: None,
-            initial_window_pos: None,
-            initial_window_size: None,
-            min_window_size: None,
-            max_window_size: None,
-            resizable: true,
-            transparent: false,
-        },
+        "voice_vox_gui",
+        NativeOptions::default(),
+        Box::new(|cc| {
+            app.setup(cc);
+            Box::new(app)
+        }),
     );
 }

@@ -6,7 +6,6 @@ use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError
 use async_trait::async_trait;
 use once_cell::race::OnceBox;
 use reqwest::{Error, StatusCode};
-use std::io::Read;
 
 pub type CoreVersion = Option<String>;
 

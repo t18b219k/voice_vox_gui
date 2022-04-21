@@ -19,7 +19,7 @@ impl<'a> Widget for LeftPane<'a> {
                 )) {
                     let t_id = i.texture_id(ui.ctx());
                     ui.vertical_centered(|ui| {
-                        ui.image(t_id, i.size_vec2());
+                        ui.image(t_id, eframe::egui::vec2(128.0, 256.0));
                     });
                 }
             }
