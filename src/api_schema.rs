@@ -129,7 +129,7 @@ pub struct Speaker {
 
 #[derive(Deserialize, Debug)]
 pub struct SpeakerStyle {
-    name: String,
+    pub(crate) name: String,
     pub(crate) id: i64,
 }
 

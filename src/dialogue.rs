@@ -9,6 +9,14 @@ pub trait DialogueSelectable<T: PartialEq + Clone> {
 
 pub struct ExitControl;
 
+pub struct AcceptControl;
+
+impl DialogueSelectable<bool> for AcceptControl {
+    fn layout(&self) -> Vec<Option<(bool, &str)>> {
+        vec![None, Some((false, "いいえ")), Some((true, "はい"))]
+    }
+}
+
 impl DialogueSelectable<bool> for ExitControl {
     fn layout(&self) -> Vec<Option<(bool, &str)>> {
         vec![Some((false, "キャンセル")), None, Some((true, "終了"))]

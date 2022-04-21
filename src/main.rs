@@ -4,6 +4,7 @@ use eframe::NativeOptions;
 
 mod api;
 mod api_schema;
+mod chara_change_button;
 mod context_menu;
 mod dialogue;
 mod left_pane;
@@ -11,7 +12,10 @@ mod menu;
 mod project;
 mod tool_bar;
 
-trace::init_depth_var!();
+enum DialogueKind {
+    ExitCustomize,
+    RestoreDefault,
+}
 
 struct VoiceVoxRust {
     current_project: VoiceVoxProject,
@@ -21,8 +25,10 @@ struct VoiceVoxRust {
     tool_bar_config_editing: Vec<ToolBarOp>,
     cursoring: usize,
     block_menu_control: bool,
-    dialog_opening: bool,
-    left_pane: crate::left_pane::LeftPane,
+    opening_dialogues: Option<DialogueKind>,
+    opening_chara_change_button: Option<usize>,
+    current_selected_tts_line: usize,
+    tts_lines: Vec<TTS>,
 }
 
 enum CurrentView {
@@ -32,11 +38,7 @@ enum CurrentView {
 
 impl VoiceVoxRust {
     async fn new() -> Self {
-        let mut left_pane = crate::left_pane::LeftPane::new().await;
-        let name = left_pane.names().next();
-        if let Some(name) = name.cloned() {
-            left_pane.set_displaying_name(&name);
-        }
+
         Self {
             current_project: VoiceVoxProject {},
             opening_file: None,
@@ -52,8 +54,13 @@ impl VoiceVoxRust {
             tool_bar_config_editing: vec![],
             cursoring: 0,
             block_menu_control: false,
-            dialog_opening: false,
-            left_pane,
+            opening_dialogues: None,
+            opening_chara_change_button: None,
+            current_selected_tts_line: 0,
+            tts_lines: vec![TTS {
+                character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
+                text: "".to_string(),
+            }],
         }
     }
 }
@@ -62,6 +69,11 @@ use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
 use crate::tool_bar::ToolBarOp;
 use eframe::egui;
+
+struct TTS {
+    character_and_style: (String, String),
+    text: String,
+}
 
 impl App for VoiceVoxRust {
     fn update(&mut self, ctx: &Context, frame: &Frame) {
@@ -110,9 +122,38 @@ impl App for VoiceVoxRust {
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical(|ui| {
                         crate::tool_bar::tool_bar(ui, &self.tool_bar_config, 28.0, false);
-                        egui::containers::SidePanel::left("chara_view")
-                            .show_inside(ui, |ui| self.left_pane.render_left_pane(ui));
-                        egui::containers::CentralPanel::default().show_inside(ui, |_ui| {});
+                        egui::containers::SidePanel::left("chara_view").show_inside(ui, |ui| {
+                            if let Some(portrait_line) =
+                                self.tts_lines.get(self.current_selected_tts_line)
+                            {
+                                let left_pane = crate::left_pane::LeftPane {
+                                    current_character_and_style: (
+                                        portrait_line.character_and_style.0.as_str(),
+                                        portrait_line.character_and_style.1.as_str(),
+                                    ),
+                                };
+                                ui.add(left_pane);
+                            }
+                        });
+                        egui::containers::CentralPanel::default().show_inside(ui, |ui| {
+                            for tts_line in self.tts_lines.iter_mut() {
+                                ui.horizontal(|ui| {
+                                    let mut ccb = chara_change_button::CharaChangeButton::new(
+                                        &tts_line.character_and_style.0,
+                                        &tts_line.character_and_style.1,
+                                        &mut self.opening_chara_change_button,
+                                        0,
+                                    );
+                                    let chara_change_notify = ccb.ui(ui, ctx);
+                                    ui.text_edit_singleline(&mut tts_line.text);
+                                    if let Some(ccn) = chara_change_notify {
+                                        log::debug!("set character and style {} {}", ccn.0, ccn.1);
+                                        tts_line.character_and_style =
+                                            (ccn.0.to_owned(), ccn.1.to_owned());
+                                    }
+                                });
+                            }
+                        });
                         egui::containers::SidePanel::right("parameter_control")
                             .show_inside(ui, |_ui| {});
                     });
@@ -120,7 +161,7 @@ impl App for VoiceVoxRust {
             }
             CurrentView::ToolBarCustomize => {
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
-                    ui.add_enabled_ui(!self.dialog_opening, |ui| {
+                    ui.add_enabled_ui(self.opening_dialogues.is_none(), |ui| {
                         ui.vertical(|ui| {
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
@@ -149,7 +190,8 @@ impl App for VoiceVoxRust {
                                         if ui.add(exit).clicked() {
                                             if self.tool_bar_config != self.tool_bar_config_editing
                                             {
-                                                self.dialog_opening = true;
+                                                self.opening_dialogues =
+                                                    Some(DialogueKind::ExitCustomize);
                                             } else {
                                                 self.block_menu_control = false;
                                                 self.current_view = CurrentView::Main;
@@ -161,14 +203,8 @@ impl App for VoiceVoxRust {
                                                 self.tool_bar_config_editing.clone();
                                         }
                                         if ui.add_enabled(is_default, restore_default).clicked() {
-                                            self.tool_bar_config_editing = vec![
-                                                ToolBarOp::PlayAll,
-                                                ToolBarOp::Stop,
-                                                ToolBarOp::ExportSelected,
-                                                ToolBarOp::Blank,
-                                                ToolBarOp::Undo,
-                                                ToolBarOp::Redo,
-                                            ];
+                                            self.opening_dialogues =
+                                                Some(DialogueKind::RestoreDefault);
                                         }
                                     });
                                 });
@@ -242,25 +278,56 @@ impl App for VoiceVoxRust {
                         });
                     });
                 });
-                if self.dialog_opening {
-                    let mut cell: Option<bool> = None;
-                    let dialogue = dialogue::Dialogue {
-                        title: "カスタマイズを放棄しますか",
-                        text: "このまま終了すると,カスタマイズは放棄されてリセットされます.",
-                        control_constructor: Box::new(ExitControl {}),
-                        cell: Some(&mut cell),
-                    };
-                    dialogue.show(ctx);
-                    match cell {
-                        Some(true) => {
-                            self.dialog_opening = false;
-                            self.block_menu_control = false;
-                            self.current_view = CurrentView::Main;
+                match self.opening_dialogues {
+                    None => {}
+                    Some(DialogueKind::ExitCustomize) => {
+                        let mut cell: Option<bool> = None;
+                        let dialogue = dialogue::Dialogue {
+                            title: "カスタマイズを放棄しますか",
+                            text: "このまま終了すると,カスタマイズは放棄されてリセットされます.",
+                            control_constructor: Box::new(ExitControl {}),
+                            cell: Some(&mut cell),
+                        };
+                        dialogue.show(ctx);
+                        match cell {
+                            Some(true) => {
+                                self.opening_dialogues = None;
+                                self.block_menu_control = false;
+                                self.current_view = CurrentView::Main;
+                            }
+                            Some(false) => {
+                                self.opening_dialogues = None;
+                            }
+                            _ => {}
                         }
-                        Some(false) => {
-                            self.dialog_opening = false;
+                    }
+                    Some(DialogueKind::RestoreDefault) => {
+                        let mut cell: Option<bool> = None;
+                        let dialogue = dialogue::Dialogue {
+                            title: "ツールバーをデフォルトに戻します",
+                            text: "ツールバーをデフォルトに戻します.よろしいですか.",
+                            control_constructor: Box::new(crate::dialogue::AcceptControl {}),
+                            cell: Some(&mut cell),
+                        };
+                        dialogue.show(ctx);
+                        match cell {
+                            Some(true) => {
+                                self.opening_dialogues = None;
+                                self.block_menu_control = false;
+                                self.tool_bar_config_editing = vec![
+                                    ToolBarOp::PlayAll,
+                                    ToolBarOp::Stop,
+                                    ToolBarOp::ExportSelected,
+                                    ToolBarOp::Blank,
+                                    ToolBarOp::Undo,
+                                    ToolBarOp::Redo,
+                                ];
+                            }
+                            Some(false) => {
+                                self.opening_dialogues = None;
+                            }
+                            _ => {}
                         }
-                        _ => {}
                     }
                 }
             }
@@ -294,6 +361,7 @@ impl App for VoiceVoxRust {
 async fn main() {
     simple_log::console("debug").unwrap();
     api::init();
+    chara_change_button::init_icon_store().await;
     eframe::run_native(
         Box::new(VoiceVoxRust::new().await),
         NativeOptions {

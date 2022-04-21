@@ -3,20 +3,19 @@
 //!
 
 use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
-use crate::DEPTH;
 use async_trait::async_trait;
 use once_cell::race::OnceBox;
 use reqwest::{Client, Error, Response, StatusCode};
 use std::io::Read;
-use trace::trace;
 
 pub type CoreVersion = Option<String>;
 
+///起動時に[crate::api::init()]を使用し初期化すること.
 static CLIENT: OnceBox<reqwest::Client> = once_cell::race::OnceBox::new();
 
-pub fn init() -> Result<(), Box<Client>> {
+pub fn init() {
     let client = reqwest::Client::new();
-    CLIENT.set(Box::new(client))
+    CLIENT.set(Box::new(client)).unwrap()
 }
 
 /// # 音声合成用のクエリを作成する
