@@ -38,7 +38,6 @@ enum CurrentView {
 
 impl VoiceVoxRust {
     async fn new() -> Self {
-
         Self {
             current_project: VoiceVoxProject {},
             opening_file: None,

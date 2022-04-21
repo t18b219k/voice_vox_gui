@@ -5,7 +5,7 @@
 use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError, KanaParseError};
 use async_trait::async_trait;
 use once_cell::race::OnceBox;
-use reqwest::{Client, Error, Response, StatusCode};
+use reqwest::{Error, StatusCode};
 use std::io::Read;
 
 pub type CoreVersion = Option<String>;
@@ -683,8 +683,6 @@ impl Api for SupportedDevices {
         }
     }
 }
-
-use tokio::test;
 
 #[tokio::test]
 async fn call_supported_devices() {

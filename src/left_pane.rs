@@ -1,9 +1,6 @@
-use crate::api;
-use crate::api::Api;
-use crate::api_schema;
 use crate::chara_change_button::ICON_AND_PORTRAIT_STORE;
 use eframe::egui::{Response, Ui, Widget};
-use std::collections::HashMap;
+
 pub struct LeftPane<'a> {
     pub(crate) current_character_and_style: (&'a str, &'a str),
 }

@@ -1,10 +1,10 @@
 use eframe::egui;
-use eframe::egui::{Context, Response, Ui, Widget};
+use eframe::egui::{Context, Ui};
 use std::collections::HashMap;
 
 use crate::api;
 use crate::api::Api;
-use crate::api_schema;
+
 pub(crate) static ICON_AND_PORTRAIT_STORE: once_cell::race::OnceBox<
     HashMap<(String, String), egui_extras::RetainedImage>,
 > = once_cell::race::OnceBox::new();
@@ -137,7 +137,7 @@ impl<'a, 'notify> CharaChangeButton<'a, 'notify> {
                                         ui.separator();
                                         ui.menu_button(">", |ui| {
                                             for style in styles {
-                                                if let Some(style_icon) =
+                                                if let Some(_style_icon) =
                                                     image.get(&(character.clone(), style.clone()))
                                                 {
                                                     let style_button = egui::Button::image_and_text(
