@@ -9,7 +9,7 @@ pub(crate) static ICON_AND_PORTRAIT_STORE: once_cell::race::OnceBox<
     HashMap<(String, String), egui_extras::RetainedImage>,
 > = once_cell::race::OnceBox::new();
 
-static STYLE_STRUCTURE: once_cell::race::OnceBox<Vec<(String, Vec<String>)>> =
+static STYLE_STRUCTURE: once_cell::race::OnceBox<Vec<(String, Vec<(String, i64)>)>> =
     once_cell::race::OnceBox::new();
 
 pub(crate) async fn init_icon_store() -> Option<()> {
@@ -49,7 +49,7 @@ pub(crate) async fn init_icon_store() -> Option<()> {
                     &info.icon,
                 )
                 .ok()?;
-                style_names.push(sty_name.clone());
+                style_names.push((sty_name.clone(), style.id));
                 log::debug!("add icon for {}({})", name, sty_name);
                 let key = (name.clone(), sty_name);
                 map.insert(key, value);
@@ -83,7 +83,7 @@ impl<'a> CharaChangeButton<'a> {
             current_character: (character, style),
         }
     }
-    pub fn ui(&mut self, ui: &mut Ui, ctx: &Context) -> Option<(&'a str, &'a str)> {
+    pub fn ui(&mut self, ui: &mut Ui, ctx: &Context) -> Option<(&'a str, &'a str, i64)> {
         let mut rt = None;
         let image = ICON_AND_PORTRAIT_STORE.get()?;
         let style_structure = STYLE_STRUCTURE.get()?;
@@ -97,7 +97,7 @@ impl<'a> CharaChangeButton<'a> {
             egui::vec2(32.0, 32.0),
             |ui| {
                 for (character, styles) in style_structure {
-                    if let Some(default_style) = styles.get(0) {
+                    if let Some((default_style, speaker)) = styles.get(0) {
                         if let Some(default_icon) =
                             image.get(&(character.clone(), default_style.clone()))
                         {
@@ -114,7 +114,7 @@ impl<'a> CharaChangeButton<'a> {
                                         default_icon.texture_id(ctx),
                                         egui::vec2(32.0, 32.0),
                                         |ui| {
-                                            for style in styles {
+                                            for (style, speaker) in styles {
                                                 if let Some(style_icon) =
                                                     image.get(&(character.clone(), style.clone()))
                                                 {
@@ -132,6 +132,7 @@ impl<'a> CharaChangeButton<'a> {
                                                         rt = Some((
                                                             character.as_str(),
                                                             style.as_str(),
+                                                            *speaker,
                                                         ));
                                                     }
                                                 }
@@ -146,7 +147,11 @@ impl<'a> CharaChangeButton<'a> {
                                         &character,
                                         &default_style
                                     );
-                                    rt = Some((character.as_str(), default_style.as_str()));
+                                    rt = Some((
+                                        character.as_str(),
+                                        default_style.as_str(),
+                                        *speaker,
+                                    ));
                                 }
                             } else {
                                 if ui.add(default_style_button).clicked() {
@@ -155,7 +160,11 @@ impl<'a> CharaChangeButton<'a> {
                                         &character,
                                         &default_style
                                     );
-                                    rt = Some((character.as_str(), default_style.as_str()));
+                                    rt = Some((
+                                        character.as_str(),
+                                        default_style.as_str(),
+                                        *speaker,
+                                    ));
                                 }
                             }
                         }

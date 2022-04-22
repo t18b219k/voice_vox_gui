@@ -1,4 +1,4 @@
-use eframe::egui::{Color32, Context, FontFamily, Layout};
+use eframe::egui::{Color32, Context, FontFamily, Layout, Stroke};
 use eframe::epi::{Frame, Storage};
 use eframe::{CreationContext, NativeOptions};
 
@@ -56,12 +56,14 @@ impl VoiceVoxRust {
             current_selected_tts_line: 0,
             tts_lines: vec![TTS {
                 character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
+                speaker_in_audio_query: 2,
                 text: "".to_string(),
             }],
         }
     }
     fn setup(&mut self, cc: &CreationContext) {
         let mut fonts = egui::FontDefinitions::default();
+
         fonts
             .families
             .entry(FontFamily::Proportional)
@@ -81,6 +83,7 @@ impl VoiceVoxRust {
         cc.egui_ctx.set_fonts(fonts);
     }
 }
+use crate::api::Api;
 use crate::dialogue::ExitControl;
 use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
@@ -89,11 +92,13 @@ use eframe::egui;
 
 struct TTS {
     character_and_style: (String, String),
+    speaker_in_audio_query: i64,
     text: String,
 }
 
 impl eframe::App for VoiceVoxRust {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+        let mut should_delete = None;
         frame.set_window_title(&format!(
             "{} VoiceVox",
             self.opening_file.as_ref().unwrap_or(&"*".to_owned())
@@ -152,27 +157,93 @@ impl eframe::App for VoiceVoxRust {
                                 ui.add(left_pane);
                             }
                         });
-                        egui::containers::CentralPanel::default().show_inside(ui, |ui| {
-                            for tts_line in self.tts_lines.iter_mut() {
-                                ui.horizontal(|ui| {
-                                    let mut ccb = chara_change_button::CharaChangeButton::new(
-                                        &tts_line.character_and_style.0,
-                                        &tts_line.character_and_style.1,
-                                    );
-                                    let chara_change_notify = ccb.ui(ui, ctx);
-                                    ui.text_edit_singleline(&mut tts_line.text);
-                                    if let Some(ccn) = chara_change_notify {
-                                        log::debug!("set character and style {} {}", ccn.0, ccn.1);
-                                        tts_line.character_and_style =
-                                            (ccn.0.to_owned(), ccn.1.to_owned());
-                                    }
-                                });
-                            }
-                        });
                         egui::containers::SidePanel::right("parameter_control")
                             .show_inside(ui, |_ui| {});
+                        egui::containers::CentralPanel::default().show_inside(ui, |ui| {
+                            let bottom_right = ui.max_rect().max;
+                            let available_with = ui.available_width() - 64.0;
+
+                            egui::ScrollArea::vertical().show(ui, |ui| {
+                                ui.set_min_width(available_with);
+                                let len = self.tts_lines.len();
+                                for (line, tts_line) in self.tts_lines.iter_mut().enumerate() {
+                                    ui.horizontal(|ui| {
+                                        let mut ccb = chara_change_button::CharaChangeButton::new(
+                                            &tts_line.character_and_style.0,
+                                            &tts_line.character_and_style.1,
+                                        );
+                                        let chara_change_notify = ccb.ui(ui, ctx);
+                                        //フォーカスを失ったら合成リクエストを送る.
+                                        if ui.text_edit_singleline(&mut tts_line.text).lost_focus()
+                                            && !tts_line.text.is_empty()
+                                        {
+                                            let text = tts_line.text.clone();
+                                            let speaker = tts_line.speaker_in_audio_query;
+                                            let join_handle = tokio::spawn(async move {
+                                                api::AudioQuery {
+                                                    text,
+                                                    speaker,
+                                                    core_version: None,
+                                                }
+                                                .call()
+                                                .await
+                                            });
+                                        }
+                                        if len > 1 {
+                                            if ui.button("X").clicked() {
+                                                should_delete = Some(line);
+                                            }
+                                        }
+                                        if let Some(ccn) = chara_change_notify {
+                                            log::debug!(
+                                                "set character and style {} {}",
+                                                ccn.0,
+                                                ccn.1
+                                            );
+                                            tts_line.speaker_in_audio_query = ccn.2;
+                                            tts_line.character_and_style =
+                                                (ccn.0.to_owned(), ccn.1.to_owned());
+                                        }
+                                    });
+                                }
+                            });
+
+                            let top_left = bottom_right - egui::vec2(64.0, 64.0);
+                            let center = bottom_right - egui::vec2(32.0, 32.0);
+                            let response = ui.allocate_rect(
+                                egui::Rect::from_min_max(top_left, bottom_right),
+                                egui::Sense::click(),
+                            );
+                            let rect = response.rect;
+                            let painter = ui.painter_at(rect);
+                            painter.circle_filled(center, 32.0, Color32::LIGHT_GREEN);
+                            painter.hline(
+                                center.x - 8.0..=center.x + 8.0,
+                                center.y,
+                                Stroke::new(4.0, Color32::BLACK),
+                            );
+                            painter.vline(
+                                center.x,
+                                center.y - 8.0..=center.y + 8.0,
+                                Stroke::new(4.0, Color32::BLACK),
+                            );
+
+                            if response.clicked() {
+                                self.tts_lines.push(TTS {
+                                    character_and_style: (
+                                        "四国めたん".to_string(),
+                                        "ノーマル".to_string(),
+                                    ),
+                                    speaker_in_audio_query: 2,
+                                    text: "".to_string(),
+                                })
+                            }
+                        });
                     });
                 });
+                if let Some(delete_line) = should_delete {
+                    self.tts_lines.remove(delete_line);
+                }
             }
             CurrentView::ToolBarCustomize => {
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
