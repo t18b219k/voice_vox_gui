@@ -98,28 +98,22 @@ impl<'a> CharaChangeButton<'a> {
             |ui| {
                 for (character, styles) in style_structure {
                     if let Some(default_style) = styles.get(0) {
-                        ui.horizontal(|ui| {
-                            if let Some(default_icon) =
-                                image.get(&(character.clone(), default_style.clone()))
-                            {
-                                let default_style_button = egui::Button::image_and_text(
-                                    default_icon.texture_id(ctx),
-                                    egui::epaint::vec2(32.0, 32.0),
-                                    character,
-                                );
+                        if let Some(default_icon) =
+                            image.get(&(character.clone(), default_style.clone()))
+                        {
+                            let default_style_button = egui::Button::image_and_text(
+                                default_icon.texture_id(ctx),
+                                egui::epaint::vec2(32.0, 32.0),
+                                character,
+                            );
 
-                                if ui.add(default_style_button).clicked() {
-                                    log::debug!(
-                                        "emit character select ({},{})",
-                                        &character,
-                                        &default_style
-                                    );
-                                    rt = Some((character.as_str(), default_style.as_str()));
-                                }
-
-                                if styles.len() > 1 {
-                                    ui.with_layout(Layout::right_to_left(), |ui| {
-                                        ui.menu_button("", |ui| {
+                            if styles.len() > 1 {
+                                if ui
+                                    .menu_button_with_image(
+                                        character,
+                                        default_icon.texture_id(ctx),
+                                        egui::vec2(32.0, 32.0),
+                                        |ui| {
                                             for style in styles {
                                                 if let Some(style_icon) =
                                                     image.get(&(character.clone(), style.clone()))
@@ -142,12 +136,29 @@ impl<'a> CharaChangeButton<'a> {
                                                     }
                                                 }
                                             }
-                                        });
-                                        ui.separator();
-                                    });
+                                        },
+                                    )
+                                    .response
+                                    .clicked()
+                                {
+                                    log::debug!(
+                                        "emit character select ({},{})",
+                                        &character,
+                                        &default_style
+                                    );
+                                    rt = Some((character.as_str(), default_style.as_str()));
+                                }
+                            } else {
+                                if ui.add(default_style_button).clicked() {
+                                    log::debug!(
+                                        "emit character select ({},{})",
+                                        &character,
+                                        &default_style
+                                    );
+                                    rt = Some((character.as_str(), default_style.as_str()));
                                 }
                             }
-                        });
+                        }
                     }
                 }
             },
