@@ -218,15 +218,14 @@ impl eframe::App for VoiceVoxRust {
                                             tts_line.character_and_style =
                                                 (ccn.0.to_owned(), ccn.1.to_owned());
                                         }
-                                        match &mut tts_line.state {
-                                            AudioQueryState::WaitingForQuery(ref mut ac) => {
-                                                if let Ok(aq) = ac.try_recv() {
-                                                    tts_line.state = AudioQueryState::Finished(aq);
-                                                } else {
-                                                    ui.spinner();
-                                                }
+                                        if let AudioQueryState::WaitingForQuery(ref mut ac) =
+                                            tts_line.state
+                                        {
+                                            if let Ok(aq) = ac.try_recv() {
+                                                tts_line.state = AudioQueryState::Finished(aq);
+                                            } else {
+                                                ui.spinner();
                                             }
-                                            _ => {}
                                         }
                                     });
                                 }
