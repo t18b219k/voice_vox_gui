@@ -1,5 +1,5 @@
 use eframe::egui::{Color32, Context, FontFamily, Layout, Stroke};
-use eframe::epi::{Frame, Storage};
+use eframe::epi::Frame;
 use eframe::{CreationContext, NativeOptions};
 
 mod api;
@@ -179,7 +179,7 @@ impl eframe::App for VoiceVoxRust {
                                         {
                                             let text = tts_line.text.clone();
                                             let speaker = tts_line.speaker_in_audio_query;
-                                            let join_handle = tokio::spawn(async move {
+                                            let _join_handle = tokio::spawn(async move {
                                                 api::AudioQuery {
                                                     text,
                                                     speaker,

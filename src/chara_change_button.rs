@@ -1,7 +1,7 @@
 use crate::api;
 use crate::api::Api;
 use eframe::egui;
-use eframe::egui::{Layout, Ui};
+use eframe::egui::Ui;
 use egui::Context;
 use std::collections::HashMap;
 
