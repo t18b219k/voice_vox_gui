@@ -58,6 +58,7 @@ impl VoiceVoxRust {
                 character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
                 speaker_in_audio_query: 2,
                 text: "".to_string(),
+                state: AudioQueryState::NoJob,
             }],
         }
     }
@@ -89,11 +90,19 @@ use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
 use crate::tool_bar::ToolBarOp;
 use eframe::egui;
+use tokio::sync::oneshot::Receiver;
 
 struct TTS {
     character_and_style: (String, String),
     speaker_in_audio_query: i64,
     text: String,
+    state: AudioQueryState,
+}
+
+enum AudioQueryState {
+    WaitingForQuery(Receiver<api_schema::AudioQuery>),
+    NoJob,
+    Finished(api_schema::AudioQuery),
 }
 
 impl eframe::App for VoiceVoxRust {
@@ -179,14 +188,19 @@ impl eframe::App for VoiceVoxRust {
                                         {
                                             let text = tts_line.text.clone();
                                             let speaker = tts_line.speaker_in_audio_query;
-                                            let _join_handle = tokio::spawn(async move {
-                                                api::AudioQuery {
-                                                    text,
-                                                    speaker,
-                                                    core_version: None,
-                                                }
-                                                .call()
-                                                .await
+                                            let (tx, rx) = tokio::sync::oneshot::channel();
+                                            tts_line.state = AudioQueryState::WaitingForQuery(rx);
+                                            tokio::spawn(async move {
+                                                tx.send(
+                                                    api::AudioQuery {
+                                                        text,
+                                                        speaker,
+                                                        core_version: None,
+                                                    }
+                                                    .call()
+                                                    .await
+                                                    .unwrap(),
+                                                );
                                             });
                                         }
                                         if len > 1 {
@@ -203,6 +217,16 @@ impl eframe::App for VoiceVoxRust {
                                             tts_line.speaker_in_audio_query = ccn.2;
                                             tts_line.character_and_style =
                                                 (ccn.0.to_owned(), ccn.1.to_owned());
+                                        }
+                                        match &mut tts_line.state {
+                                            AudioQueryState::WaitingForQuery(ref mut ac) => {
+                                                if let Ok(aq) = ac.try_recv() {
+                                                    tts_line.state = AudioQueryState::Finished(aq);
+                                                } else {
+                                                    ui.spinner();
+                                                }
+                                            }
+                                            _ => {}
                                         }
                                     });
                                 }
@@ -236,6 +260,7 @@ impl eframe::App for VoiceVoxRust {
                                     ),
                                     speaker_in_audio_query: 2,
                                     text: "".to_string(),
+                                    state: AudioQueryState::NoJob,
                                 })
                             }
                         });
