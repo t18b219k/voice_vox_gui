@@ -4,12 +4,14 @@ use eframe::{CreationContext, NativeOptions};
 
 mod api;
 mod api_schema;
+mod bottom_pane;
 mod chara_change_button;
 mod context_menu;
 mod dialogue;
 mod left_pane;
 mod menu;
 mod project;
+mod right_pane;
 mod tool_bar;
 
 enum DialogueKind {
@@ -37,6 +39,14 @@ enum CurrentView {
 
 impl VoiceVoxRust {
     async fn new() -> Self {
+        let initial_audio_query = api::AudioQuery {
+            text: "".to_string(),
+            speaker: 2,
+            core_version: None,
+        }
+        .call()
+        .await
+        .unwrap();
         Self {
             current_project: VoiceVoxProject {},
             opening_file: None,
@@ -58,7 +68,8 @@ impl VoiceVoxRust {
                 character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
                 speaker_in_audio_query: 2,
                 text: "".to_string(),
-                state: AudioQueryState::NoJob,
+                back_up: "".to_string(),
+                state: AudioQueryState::Finished(initial_audio_query),
             }],
         }
     }
@@ -96,6 +107,7 @@ struct TTS {
     character_and_style: (String, String),
     speaker_in_audio_query: i64,
     text: String,
+    back_up: String,
     state: AudioQueryState,
 }
 
@@ -166,8 +178,18 @@ impl eframe::App for VoiceVoxRust {
                                 ui.add(left_pane);
                             }
                         });
-                        egui::containers::SidePanel::right("parameter_control")
-                            .show_inside(ui, |_ui| {});
+                        egui::containers::SidePanel::right("parameter_control").show_inside(
+                            ui,
+                            |ui| {
+                                if let Some(aq) =
+                                    self.tts_lines.get_mut(self.current_selected_tts_line)
+                                {
+                                    if let AudioQueryState::Finished(aq) = &mut aq.state {
+                                        crate::right_pane::render_synthesis_control(aq, ui);
+                                    }
+                                }
+                            },
+                        );
                         egui::containers::CentralPanel::default().show_inside(ui, |ui| {
                             let bottom_right = ui.max_rect().max;
                             let available_with = ui.available_width() - 64.0;
@@ -182,11 +204,19 @@ impl eframe::App for VoiceVoxRust {
                                             &tts_line.character_and_style.1,
                                         );
                                         let chara_change_notify = ccb.ui(ui, ctx);
+
+                                        let res = ui.text_edit_singleline(&mut tts_line.text);
+
+                                        if res.has_focus() {
+                                            self.current_selected_tts_line = line;
+                                        }
                                         //フォーカスを失ったら合成リクエストを送る.
-                                        if ui.text_edit_singleline(&mut tts_line.text).lost_focus()
+                                        if res.lost_focus()
                                             && !tts_line.text.is_empty()
+                                            && tts_line.back_up != tts_line.text
                                         {
                                             let text = tts_line.text.clone();
+                                            tts_line.back_up = text.clone();
                                             let speaker = tts_line.speaker_in_audio_query;
                                             let (tx, rx) = tokio::sync::oneshot::channel();
                                             tts_line.state = AudioQueryState::WaitingForQuery(rx);
@@ -259,6 +289,7 @@ impl eframe::App for VoiceVoxRust {
                                     ),
                                     speaker_in_audio_query: 2,
                                     text: "".to_string(),
+                                    back_up: "".to_string(),
                                     state: AudioQueryState::NoJob,
                                 })
                             }
@@ -453,7 +484,10 @@ async fn main() {
 
     eframe::run_native(
         "voice_vox_gui",
-        NativeOptions::default(),
+        NativeOptions {
+            initial_window_size: Some(egui::vec2(800.0, 600.0)),
+            ..NativeOptions::default()
+        },
         Box::new(|cc| {
             app.setup(cc);
             Box::new(app)

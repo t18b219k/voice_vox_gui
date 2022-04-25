@@ -6,24 +6,24 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct AudioQuery {
-    accent_phrases: Vec<AccentPhrase>,
+    pub accent_phrases: Vec<AccentPhrase>,
     #[serde(rename = "speedScale")]
-    speed_scale: f64,
+    pub speed_scale: f64,
     #[serde(rename = "pitchScale")]
-    pitch_scale: f64,
+    pub pitch_scale: f64,
     #[serde(rename = "intonationScale")]
-    intonation_scale: f64,
+    pub intonation_scale: f64,
     #[serde(rename = "volumeScale")]
-    volume_scale: f64,
+    pub volume_scale: f64,
     #[serde(rename = "prePhonemeLength")]
-    pre_phoneme_length: f64,
+    pub pre_phoneme_length: f64,
     #[serde(rename = "postPhonemeLength")]
-    post_phoneme_length: f64,
+    pub post_phoneme_length: f64,
     #[serde(rename = "outputSamplingRate")]
-    output_sampling_rate: i64,
+    pub output_sampling_rate: i64,
     #[serde(rename = "outputStereo")]
-    output_stereo: bool,
-    kana: Option<String>,
+    pub output_stereo: bool,
+    pub kana: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
