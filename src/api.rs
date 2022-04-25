@@ -29,7 +29,7 @@ pub struct AudioQuery {
 }
 #[async_trait]
 impl Api for AudioQuery {
-    type Response = Result<crate::api_schema::AudioQuery, APIErrorReqwest>;
+    type Response = Result<crate::api_schema::AudioQuery, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -42,7 +42,7 @@ impl Api for AudioQuery {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -62,7 +62,7 @@ struct AudioQueryFromPreset {
 }
 #[async_trait]
 impl Api for AudioQueryFromPreset {
-    type Response = Result<crate::api_schema::AudioQuery, APIErrorReqwest>;
+    type Response = Result<crate::api_schema::AudioQuery, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -75,7 +75,7 @@ impl Api for AudioQueryFromPreset {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -111,7 +111,7 @@ pub struct AccentPhrases {
 #[derive(Debug)]
 pub enum AccentPhrasesErrors {
     KanaParseError(KanaParseError),
-    ApiError(APIErrorReqwest),
+    ApiError(APIError),
 }
 
 impl From<reqwest::Error> for AccentPhrasesErrors {
@@ -146,7 +146,7 @@ impl Api for AccentPhrases {
                 res.json::<KanaParseError>().await?,
             )),
             StatusCode::UNPROCESSABLE_ENTITY => Err(AccentPhrasesErrors::ApiError(
-                APIErrorReqwest::Validation(res.json::<HttpValidationError>().await?),
+                APIError::Validation(res.json::<HttpValidationError>().await?),
             )),
             x => Err(x.into()),
         }
@@ -163,7 +163,7 @@ pub struct MoraData {
 }
 #[async_trait]
 impl Api for MoraData {
-    type Response = Result<Vec<AccentPhrase>, APIErrorReqwest>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -176,7 +176,7 @@ impl Api for MoraData {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -194,7 +194,7 @@ pub struct MoraLength {
 }
 #[async_trait]
 impl Api for MoraLength {
-    type Response = Result<Vec<AccentPhrase>, APIErrorReqwest>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -207,7 +207,7 @@ impl Api for MoraLength {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -225,7 +225,7 @@ pub struct MoraPitch {
 }
 #[async_trait]
 impl Api for MoraPitch {
-    type Response = Result<Vec<AccentPhrase>, APIErrorReqwest>;
+    type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -238,7 +238,7 @@ impl Api for MoraPitch {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -257,7 +257,7 @@ pub struct Synthesis {
 }
 #[async_trait]
 impl Api for Synthesis {
-    type Response = Result<Vec<u8>, APIErrorReqwest>;
+    type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -274,7 +274,7 @@ impl Api for Synthesis {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -292,7 +292,7 @@ pub struct CancellableSynthesis {
 }
 #[async_trait]
 impl Api for CancellableSynthesis {
-    type Response = Result<Vec<u8>, APIErrorReqwest>;
+    type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -305,7 +305,7 @@ impl Api for CancellableSynthesis {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -326,7 +326,7 @@ pub struct MultiSynthesis {
 
 #[async_trait]
 impl Api for MultiSynthesis {
-    type Response = Result<Vec<u8>, APIErrorReqwest>;
+    type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -340,7 +340,7 @@ impl Api for MultiSynthesis {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -392,7 +392,7 @@ pub struct SynthesisMorphing {
 
 #[async_trait]
 impl Api for SynthesisMorphing {
-    type Response = Result<Vec<u8>, APIErrorReqwest>;
+    type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -410,7 +410,7 @@ impl Api for SynthesisMorphing {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -454,7 +454,7 @@ pub struct ConnectWaves {
 }
 #[async_trait]
 impl Api for ConnectWaves {
-    type Response = Result<Vec<u8>, APIErrorReqwest>;
+    type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let mut buffer = Vec::new();
@@ -470,7 +470,7 @@ impl Api for ConnectWaves {
         let res = cl.execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(base64::decode(res.text().await?).unwrap_or_default()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<HttpValidationError>().await?,
             )),
             x => Err(x.into()),
@@ -491,7 +491,7 @@ async fn call_connect_waves() {
 pub struct Presets;
 #[async_trait]
 impl Api for Presets {
-    type Response = Result<Vec<crate::api_schema::Preset>, APIErrorReqwest>;
+    type Response = Result<Vec<crate::api_schema::Preset>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -516,7 +516,7 @@ async fn call_presets() {
 pub struct Version;
 #[async_trait]
 impl Api for Version {
-    type Response = Result<Option<String>, APIErrorReqwest>;
+    type Response = Result<Option<String>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -539,7 +539,7 @@ async fn call_version() {
 pub struct CoreVersions;
 #[async_trait]
 impl Api for CoreVersions {
-    type Response = Result<Vec<String>, APIErrorReqwest>;
+    type Response = Result<Vec<String>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -567,7 +567,7 @@ pub struct Speakers {
 }
 #[async_trait]
 impl Api for Speakers {
-    type Response = Result<Vec<crate::api_schema::Speaker>, APIErrorReqwest>;
+    type Response = Result<Vec<crate::api_schema::Speaker>, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -578,7 +578,7 @@ impl Api for Speakers {
             .unwrap();
         let res = cl.execute(request).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
             )),
             StatusCode::OK => Ok(res.json::<Vec<crate::api_schema::Speaker>>().await?),
@@ -600,7 +600,7 @@ pub struct SpeakerInfo {
 }
 #[async_trait]
 impl Api for SpeakerInfo {
-    type Response = Result<crate::api_schema::SpeakerInfo, APIErrorReqwest>;
+    type Response = Result<crate::api_schema::SpeakerInfo, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -612,7 +612,7 @@ impl Api for SpeakerInfo {
             .unwrap();
         let res = cl.execute(req).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
             )),
             StatusCode::OK => Ok({
@@ -663,7 +663,7 @@ pub struct SupportedDevices {
 }
 #[async_trait]
 impl Api for SupportedDevices {
-    type Response = Result<crate::api_schema::SupportedDevices, APIErrorReqwest>;
+    type Response = Result<crate::api_schema::SupportedDevices, APIError>;
 
     async fn call(&self) -> Self::Response {
         let cl = CLIENT.get().unwrap();
@@ -674,7 +674,7 @@ impl Api for SupportedDevices {
             .unwrap();
         let res = cl.execute(request).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIErrorReqwest::Validation(
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
             )),
             StatusCode::OK => Ok(res.json::<crate::api_schema::SupportedDevices>().await?),
@@ -705,26 +705,26 @@ impl AddCoreVersion for reqwest::RequestBuilder {
 }
 
 #[derive(Debug)]
-pub enum APIErrorReqwest {
+pub enum APIError {
     Validation(HttpValidationError),
     Io(std::io::Error),
     Reqwest(reqwest::Error),
     Unknown,
 }
 
-impl From<reqwest::Error> for APIErrorReqwest {
+impl From<reqwest::Error> for APIError {
     fn from(e: Error) -> Self {
-        APIErrorReqwest::Reqwest(e)
+        APIError::Reqwest(e)
     }
 }
 
-impl Into<APIErrorReqwest> for std::io::Error {
-    fn into(self) -> APIErrorReqwest {
-        APIErrorReqwest::Io(self)
+impl Into<APIError> for std::io::Error {
+    fn into(self) -> APIError {
+        APIError::Io(self)
     }
 }
-impl From<StatusCode> for APIErrorReqwest {
+impl From<StatusCode> for APIError {
     fn from(_: StatusCode) -> Self {
-        APIErrorReqwest::Unknown
+        APIError::Unknown
     }
 }

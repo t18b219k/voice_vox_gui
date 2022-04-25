@@ -95,7 +95,8 @@ impl VoiceVoxRust {
         cc.egui_ctx.set_fonts(fonts);
     }
 }
-use crate::api::Api;
+use crate::api::{APIError, Api};
+use crate::api_schema::AudioQuery;
 use crate::dialogue::ExitControl;
 use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
@@ -112,9 +113,10 @@ struct TTS {
 }
 
 enum AudioQueryState {
-    WaitingForQuery(Receiver<api_schema::AudioQuery>),
+    WaitingForQuery(Receiver<<crate::api::AudioQuery as Api>::Response>),
     NoJob,
     Finished(api_schema::AudioQuery),
+    Failed,
 }
 
 impl eframe::App for VoiceVoxRust {
@@ -228,9 +230,9 @@ impl eframe::App for VoiceVoxRust {
                                                         core_version: None,
                                                     }
                                                     .call()
-                                                    .await
-                                                    .unwrap(),
-                                                );
+                                                    .await,
+                                                )
+                                                .unwrap();
                                             });
                                         }
                                         if len > 1 {
@@ -252,7 +254,15 @@ impl eframe::App for VoiceVoxRust {
                                             tts_line.state
                                         {
                                             if let Ok(aq) = ac.try_recv() {
-                                                tts_line.state = AudioQueryState::Finished(aq);
+                                                match aq {
+                                                    Ok(aq) => {
+                                                        tts_line.state =
+                                                            AudioQueryState::Finished(aq);
+                                                    }
+                                                    Err(_) => {
+                                                        tts_line.state = AudioQueryState::Failed;
+                                                    }
+                                                }
                                             } else {
                                                 ui.spinner();
                                             }

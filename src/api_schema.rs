@@ -104,7 +104,7 @@ pub struct KanaParseError {
     error_args: String,
 }
 
-#[allow(non_snake_case)]
+#[allow(non_snake_case, unused_variables)]
 #[derive(Deserialize, Debug)]
 pub struct Preset {
     id: i64,

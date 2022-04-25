@@ -1,7 +1,6 @@
 use crate::api_schema::AudioQuery;
-use eframe::egui;
-use eframe::egui::{Color32, Rect, Response, Sense, Stroke, Ui, Widget};
-use std::ops::RangeInclusive;
+
+use eframe::egui::Ui;
 
 pub fn render_synthesis_control(aq: &mut AudioQuery, ui: &mut Ui) {
     ui.vertical(|ui| {
