@@ -95,8 +95,8 @@ impl VoiceVoxRust {
         cc.egui_ctx.set_fonts(fonts);
     }
 }
-use crate::api::{APIError, Api};
-use crate::api_schema::AudioQuery;
+use crate::api::Api;
+
 use crate::dialogue::ExitControl;
 use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
