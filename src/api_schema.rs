@@ -4,84 +4,53 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AudioQuery {
     pub accent_phrases: Vec<AccentPhrase>,
     #[serde(rename = "speedScale")]
-    pub speed_scale: f64,
+    pub speed_scale: f32,
     #[serde(rename = "pitchScale")]
-    pub pitch_scale: f64,
+    pub pitch_scale: f32,
     #[serde(rename = "intonationScale")]
-    pub intonation_scale: f64,
+    pub intonation_scale: f32,
     #[serde(rename = "volumeScale")]
-    pub volume_scale: f64,
+    pub volume_scale: f32,
     #[serde(rename = "prePhonemeLength")]
-    pub pre_phoneme_length: f64,
+    pub pre_phoneme_length: f32,
     #[serde(rename = "postPhonemeLength")]
-    pub post_phoneme_length: f64,
+    pub post_phoneme_length: f32,
     #[serde(rename = "outputSamplingRate")]
-    pub output_sampling_rate: i64,
+    pub output_sampling_rate: i32,
     #[serde(rename = "outputStereo")]
     pub output_stereo: bool,
     pub kana: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AccentPhrase {
     moras: Vec<Mora>,
-    accent: i64,
+    accent: i32,
     pause_mora: Option<Mora>,
     is_interrogative: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Debug)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Mora {
     text: String,
     consonant: Option<String>,
-    consonant_length: Option<f64>,
+    consonant_length: Option<f32>,
     vowel: String,
-    vowel_length: f64,
-    pitch: f64,
-}
-
-#[derive(Debug)]
-pub struct GuidedSynthesisFormData {
-    kana: String,
-    speaker_id: i64,
-    normalize: bool,
-    audio_file: Vec<u8>,
-    stereo: bool,
-    sample_rate: i64,
-    volume_scale: f64,
-    pitch_scale: f64,
-    speed_scale: f64,
-}
-impl GuidedSynthesisFormData {
-    pub(crate) fn build_form(&self) -> [(&str, String); 9] {
-        let mut ctr = String::new();
-        let wav_container = unsafe { ctr.as_mut_vec() };
-        wav_container.extend_from_slice(&self.audio_file);
-        [
-            ("kana", self.kana.clone()),
-            ("speaker_id", self.speaker_id.to_string()),
-            ("normalize", self.normalize.to_string()),
-            ("audio_file", ctr),
-            ("stereo", self.stereo.to_string()),
-            ("sample_rate", self.sample_rate.to_string()),
-            ("volume_scale", self.volume_scale.to_string()),
-            ("pitch_scale", self.pitch_scale.to_string()),
-            ("speed_scale", self.speed_scale.to_string()),
-        ]
-    }
+    vowel_length: f32,
+    pitch: f32,
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct HttpValidationError {
     detail: Vec<ValidationError>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct ValidationError {
     ///Location
     loc: Vec<String>,
@@ -92,7 +61,7 @@ pub struct ValidationError {
     _type: String,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct AccentPhrasesResponse {
     accent_phrases: Vec<AccentPhrase>,
 }
@@ -107,16 +76,16 @@ pub struct KanaParseError {
 #[allow(non_snake_case, unused_variables)]
 #[derive(Deserialize, Debug)]
 pub struct Preset {
-    id: i64,
+    id: i32,
     name: String,
     speaker_uuid: String,
-    style_id: i64,
-    speedScale: f64,
-    pitchScale: f64,
-    intonationScale: f64,
-    volumeScale: f64,
-    prePhonemeLength: f64,
-    postPhonemeLength: f64,
+    style_id: i32,
+    speedScale: f32,
+    pitchScale: f32,
+    intonationScale: f32,
+    volumeScale: f32,
+    prePhonemeLength: f32,
+    postPhonemeLength: f32,
 }
 
 #[derive(Deserialize, Debug)]
@@ -130,7 +99,7 @@ pub struct Speaker {
 #[derive(Deserialize, Debug)]
 pub struct SpeakerStyle {
     pub(crate) name: String,
-    pub(crate) id: i64,
+    pub(crate) id: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -144,7 +113,7 @@ pub struct SpeakerInfoRaw {
 
 #[derive(Deserialize, Debug)]
 pub struct StyleInfoRaw {
-    pub id: i64,
+    pub id: i32,
     /// base64
     pub icon: String,
     /// base64
@@ -162,7 +131,7 @@ pub struct SpeakerInfo {
 
 #[derive(Deserialize, Debug)]
 pub struct StyleInfo {
-    pub(crate) id: i64,
+    pub(crate) id: i32,
     ///png file
     pub(crate) icon: Vec<u8>,
     ///wav file

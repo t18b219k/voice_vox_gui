@@ -1,19 +1,28 @@
 use crate::api;
 use crate::api::Api;
+use crate::history::Command;
+use crate::project::VoiceVoxProject;
 use eframe::egui;
 use eframe::egui::Ui;
 use egui::Context;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 pub(crate) static ICON_AND_PORTRAIT_STORE: once_cell::race::OnceBox<
     HashMap<(String, String), egui_extras::RetainedImage>,
 > = once_cell::race::OnceBox::new();
 
-static STYLE_STRUCTURE: once_cell::race::OnceBox<Vec<(String, Vec<(String, i64)>)>> =
+/// used for construct chara changing menu.
+static STYLE_STRUCTURE: once_cell::race::OnceBox<Vec<(String, Vec<(String, i32)>)>> =
+    once_cell::race::OnceBox::new();
+
+/// used for generic usage.
+pub static STYLE_ID_AND_CHARA_TABLE: once_cell::race::OnceBox<BTreeMap<i32, (String, String)>> =
     once_cell::race::OnceBox::new();
 
 pub(crate) async fn init_icon_store() -> Option<()> {
     let mut style_structure = Vec::new();
+    let mut style_and_chara_table = BTreeMap::new();
+
     let icons = {
         let mut map = HashMap::new();
 
@@ -52,14 +61,17 @@ pub(crate) async fn init_icon_store() -> Option<()> {
                 style_names.push((sty_name.clone(), style.id));
                 log::debug!("add icon for {}({})", name, sty_name);
                 let key = (name.clone(), sty_name);
+                style_and_chara_table.insert(style.id, key.clone());
                 map.insert(key, value);
             }
             style_structure.push((name, style_names));
         }
         map
     };
-
-    STYLE_STRUCTURE.set(Box::new(style_structure));
+    STYLE_ID_AND_CHARA_TABLE
+        .set(Box::new(style_and_chara_table))
+        .ok();
+    STYLE_STRUCTURE.set(Box::new(style_structure)).ok();
     ICON_AND_PORTRAIT_STORE.set(Box::new(icons)).ok()
 }
 
@@ -70,29 +82,18 @@ async fn test_init_icon_store() {
     ICON_AND_PORTRAIT_STORE.get().unwrap();
 }
 
-pub struct CharaChangeButton<'a> {
-    current_character: (&'a str, &'a str),
-}
+pub struct CharaChangeButton(pub i32);
 
-impl<'a> CharaChangeButton<'a> {
-    ///
-    /// notify はいま開いているボタンを通知するために使用する.
-    ///
-    pub fn new(character: &'a str, style: &'a str) -> Self {
-        Self {
-            current_character: (character, style),
-        }
-    }
-    pub fn ui(&mut self, ui: &mut Ui, ctx: &Context) -> Option<(&'a str, &'a str, i64)> {
+impl CharaChangeButton {
+    pub fn ui(self, line: &String, ui: &mut Ui, ctx: &Context) -> Option<CharaChangeCommand> {
         let mut rt = None;
         let image = ICON_AND_PORTRAIT_STORE.get()?;
         let style_structure = STYLE_STRUCTURE.get()?;
-        let image_ref = image.get(&(
-            self.current_character.0.to_owned(),
-            self.current_character.1.to_owned(),
-        ))?;
+        let style_id_mapping = STYLE_ID_AND_CHARA_TABLE.get()?;
+        let current_character = style_id_mapping.get(&self.0)?;
+        let image_ref = image.get(current_character)?;
         ui.menu_image_button(
-            self.current_character.0,
+            &current_character.0,
             image_ref.texture_id(ctx),
             egui::vec2(32.0, 32.0),
             |ui| {
@@ -129,11 +130,11 @@ impl<'a> CharaChangeButton<'a> {
                                                             &character,
                                                             &style
                                                         );
-                                                        rt = Some((
-                                                            character.as_str(),
-                                                            style.as_str(),
-                                                            *speaker,
-                                                        ));
+                                                        rt = Some(CharaChangeCommand {
+                                                            line: line.clone(),
+                                                            prev_chara: self.0,
+                                                            new_chara: *speaker,
+                                                        });
                                                     }
                                                 }
                                             }
@@ -147,11 +148,11 @@ impl<'a> CharaChangeButton<'a> {
                                         &character,
                                         &default_style
                                     );
-                                    rt = Some((
-                                        character.as_str(),
-                                        default_style.as_str(),
-                                        *speaker,
-                                    ));
+                                    rt = Some(CharaChangeCommand {
+                                        line: line.clone(),
+                                        prev_chara: self.0,
+                                        new_chara: *speaker,
+                                    });
                                 }
                             } else {
                                 if ui.add(default_style_button).clicked() {
@@ -160,11 +161,11 @@ impl<'a> CharaChangeButton<'a> {
                                         &character,
                                         &default_style
                                     );
-                                    rt = Some((
-                                        character.as_str(),
-                                        default_style.as_str(),
-                                        *speaker,
-                                    ));
+                                    rt = Some(CharaChangeCommand {
+                                        line: line.clone(),
+                                        prev_chara: self.0,
+                                        new_chara: *speaker,
+                                    });
                                 }
                             }
                         }
@@ -172,7 +173,26 @@ impl<'a> CharaChangeButton<'a> {
                 }
             },
         );
-
         rt
+    }
+}
+
+pub struct CharaChangeCommand {
+    line: String,
+    prev_chara: i32,
+    new_chara: i32,
+}
+
+impl Command for CharaChangeCommand {
+    fn invoke(&mut self, project: &mut VoiceVoxProject) {
+        if let Some(audio_item) = project.audioItems.get_mut(&self.line) {
+            audio_item.styleId = self.new_chara;
+        }
+    }
+
+    fn undo(&mut self, project: &mut VoiceVoxProject) {
+        if let Some(audio_item) = project.audioItems.get_mut(&self.line) {
+            audio_item.styleId = self.prev_chara;
+        }
     }
 }

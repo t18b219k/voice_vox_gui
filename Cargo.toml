@@ -21,3 +21,4 @@ serde_json = "1"
 simple-log = "1"
 tokio = { version = "1", features = ["once_cell","net","tracing","test-util","rt-multi-thread","macros"] }
 url = "2"
+uuid={version="1",features=["v4"]}

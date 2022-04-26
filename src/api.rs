@@ -24,7 +24,7 @@ pub fn init() {
 
 pub struct AudioQuery {
     pub(crate) text: String,
-    pub(crate) speaker: i64,
+    pub(crate) speaker: i32,
     pub(crate) core_version: Option<String>,
 }
 #[async_trait]
@@ -57,7 +57,7 @@ impl Api for AudioQuery {
 ///
 struct AudioQueryFromPreset {
     text: String,
-    preset_id: i64,
+    preset_id: i32,
     core_version: CoreVersion,
 }
 #[async_trait]
@@ -103,7 +103,7 @@ pub trait Api {
 ///
 pub struct AccentPhrases {
     pub(crate) text: String,
-    pub(crate) speaker: i64,
+    pub(crate) speaker: i32,
     pub(crate) is_kana: Option<bool>,
     pub(crate) core_version: CoreVersion,
 }
@@ -156,7 +156,7 @@ impl Api for AccentPhrases {
 ///アクセント句から音高を得る
 pub struct MoraData {
     //in query
-    speaker: i64,
+    speaker: i32,
     core_version: CoreVersion,
     //in body
     accent_phrases: Vec<AccentPhrase>,
@@ -187,7 +187,7 @@ impl Api for MoraData {
 /// # アクセント句から音素長を得る
 pub struct MoraLength {
     // in query.
-    speaker: i64,
+    speaker: i32,
     core_version: CoreVersion,
     // in body.
     accent_phrases: Vec<AccentPhrase>,
@@ -218,7 +218,7 @@ impl Api for MoraLength {
 /// # アクセント句から音素長を得る
 pub struct MoraPitch {
     // in query.
-    speaker: i64,
+    speaker: i32,
     core_version: CoreVersion,
     // in body.
     accent_phrases: Vec<AccentPhrase>,
@@ -249,7 +249,7 @@ impl Api for MoraPitch {
 /// # 音声合成する
 pub struct Synthesis {
     // in query
-    pub(crate) speaker: i64,
+    pub(crate) speaker: i32,
     pub(crate) enable_interrogative_upspeak: Option<bool>,
     pub(crate) core_version: CoreVersion,
     // in body json.
@@ -285,7 +285,7 @@ impl Api for Synthesis {
 /// # 音声合成する（キャンセル可能）
 pub struct CancellableSynthesis {
     // in query
-    pub(crate) speaker: i64,
+    pub(crate) speaker: i32,
     pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: crate::api_schema::AudioQuery,
@@ -318,7 +318,7 @@ impl Api for CancellableSynthesis {
 /// 複数のwavがzipでまとめられて返されます.
 pub struct MultiSynthesis {
     // in query
-    pub(crate) speaker: i64,
+    pub(crate) speaker: i32,
     pub(crate) core_version: CoreVersion,
     // in body json.
     pub(crate) audio_query: Vec<crate::api_schema::AudioQuery>,
@@ -382,8 +382,8 @@ async fn call_multi_synthesis() {
 /// 指定された2人の話者で音声を合成、指定した割合でモーフィングした音声を得ます。 モーフィングの割合はmorph_rateで指定でき、0.0でベースの話者、1.0でターゲットの話者に近づきます。
 pub struct SynthesisMorphing {
     // in query
-    pub(crate) base_speaker: i64,
-    pub(crate) target_speaker: i64,
+    pub(crate) base_speaker: i32,
+    pub(crate) target_speaker: i32,
     pub(crate) morph_rate: f64,
     pub(crate) core_version: CoreVersion,
     // in body json.

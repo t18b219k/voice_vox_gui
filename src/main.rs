@@ -8,6 +8,7 @@ mod bottom_pane;
 mod chara_change_button;
 mod context_menu;
 mod dialogue;
+mod history;
 mod left_pane;
 mod menu;
 mod project;
@@ -20,7 +21,6 @@ enum DialogueKind {
 }
 
 struct VoiceVoxRust {
-    current_project: VoiceVoxProject,
     opening_file: Option<String>,
     tool_bar_config: Vec<ToolBarOp>,
     current_view: CurrentView,
@@ -28,8 +28,10 @@ struct VoiceVoxRust {
     cursoring: usize,
     block_menu_control: bool,
     opening_dialogues: Option<DialogueKind>,
-    current_selected_tts_line: usize,
-    tts_lines: Vec<TTS>,
+    current_selected_tts_line: String,
+    tts_line_buffer: (String, String),
+    histories: crate::history::HistoryManager,
+    audio_query_jobs: HashMap<String, AudioQueryState>,
 }
 
 enum CurrentView {
@@ -39,16 +41,7 @@ enum CurrentView {
 
 impl VoiceVoxRust {
     async fn new() -> Self {
-        let initial_audio_query = api::AudioQuery {
-            text: "".to_string(),
-            speaker: 2,
-            core_version: None,
-        }
-        .call()
-        .await
-        .unwrap();
         Self {
-            current_project: VoiceVoxProject {},
             opening_file: None,
             tool_bar_config: vec![
                 ToolBarOp::PlayAll,
@@ -63,14 +56,10 @@ impl VoiceVoxRust {
             cursoring: 0,
             block_menu_control: false,
             opening_dialogues: None,
-            current_selected_tts_line: 0,
-            tts_lines: vec![TTS {
-                character_and_style: ("四国めたん".to_string(), "ノーマル".to_string()),
-                speaker_in_audio_query: 2,
-                text: "".to_string(),
-                back_up: "".to_string(),
-                state: AudioQueryState::Finished(initial_audio_query),
-            }],
+            current_selected_tts_line: String::new(),
+            tts_line_buffer: (String::new(), String::new()),
+            histories: crate::history::HistoryManager::new().await,
+            audio_query_jobs: Default::default(),
         }
     }
     fn setup(&mut self, cc: &CreationContext) {
@@ -98,10 +87,12 @@ impl VoiceVoxRust {
 use crate::api::Api;
 
 use crate::dialogue::ExitControl;
+use crate::history::Command;
 use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
 use crate::tool_bar::ToolBarOp;
 use eframe::egui;
+use std::collections::HashMap;
 use tokio::sync::oneshot::Receiver;
 
 struct TTS {
@@ -117,6 +108,46 @@ enum AudioQueryState {
     NoJob,
     Finished(api_schema::AudioQuery),
     Failed,
+}
+
+enum AudioQueryCommands {
+    Remove(String, Option<project::AudioItem>),
+    Insert(String, project::AudioItem),
+    UpdateAccentPhrases(String, api_schema::AudioQuery),
+}
+impl Command for AudioQueryCommands {
+    fn invoke(&mut self, project: &mut VoiceVoxProject) {
+        match self {
+            AudioQueryCommands::Remove(key, ref mut save) => {
+                let pos =project.audioKeys.iter().enumerate().find(|x|{x.1==key});
+                if let Some((index,_))=pos{
+                    project.audioKeys.remove(index);
+                }
+                if let Some(value) = project.audioItems.remove(key) {
+                    save.replace(value);
+                }
+            }
+            AudioQueryCommands::Insert(key, value) => {
+                if !project.audioKeys.contains(key) {
+                    project.audioKeys.push(key.clone());
+                }
+                project.audioItems.insert(key.clone(), value.clone());
+            }
+            AudioQueryCommands::UpdateAccentPhrases(key, update) => {
+                if let Some(ai) = project.audioItems.get_mut(key) {
+                    if let Some(aq) = &mut ai.query {
+                        let ap_backup = aq.accent_phrases.clone();
+                        aq.accent_phrases = update.accent_phrases.clone();
+                        update.accent_phrases = ap_backup;
+                    }
+                }
+            }
+        }
+    }
+
+    fn undo(&mut self, project: &mut VoiceVoxProject) {
+        todo!()
+    }
 }
 
 impl eframe::App for VoiceVoxRust {
@@ -136,9 +167,7 @@ impl eframe::App for VoiceVoxRust {
 
         if let Some(op) = menu_bar_op {
             match op {
-                TopMenuOp::NewProject => {
-                    self.current_project = VoiceVoxProject {};
-                }
+                TopMenuOp::NewProject => {}
                 TopMenuOp::AudioOutput => {}
                 TopMenuOp::OutputOne => {}
                 TopMenuOp::OutputConnected => {}
@@ -163,31 +192,54 @@ impl eframe::App for VoiceVoxRust {
         }
         match self.current_view {
             CurrentView::Main => {
+                let mut invocations: Vec<Box<dyn Command>> = vec![];
+
                 egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |_ui| {});
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical(|ui| {
                         crate::tool_bar::tool_bar(ui, &self.tool_bar_config, 28.0, false);
                         egui::containers::SidePanel::left("chara_view").show_inside(ui, |ui| {
-                            if let Some(portrait_line) =
-                                self.tts_lines.get(self.current_selected_tts_line)
+                            if let Some(portrait_line) = self
+                                .histories
+                                .project
+                                .audioItems
+                                .get(&self.current_selected_tts_line)
                             {
-                                let left_pane = crate::left_pane::LeftPane {
-                                    current_character_and_style: (
-                                        portrait_line.character_and_style.0.as_str(),
-                                        portrait_line.character_and_style.1.as_str(),
-                                    ),
-                                };
-                                ui.add(left_pane);
+                                if let Some(chara) =
+                                    crate::chara_change_button::STYLE_ID_AND_CHARA_TABLE
+                                        .get()
+                                        .unwrap()
+                                        .get(&portrait_line.styleId)
+                                {
+                                    let left_pane = crate::left_pane::LeftPane {
+                                        current_character_and_style: (
+                                            chara.0.as_str(),
+                                            chara.1.as_str(),
+                                        ),
+                                    };
+                                    ui.add(left_pane);
+                                }
                             }
                         });
                         egui::containers::SidePanel::right("parameter_control").show_inside(
                             ui,
                             |ui| {
-                                if let Some(aq) =
-                                    self.tts_lines.get_mut(self.current_selected_tts_line)
+                                if let Some(audio_item) = self
+                                    .histories
+                                    .project
+                                    .audioItems
+                                    .get(&self.current_selected_tts_line)
                                 {
-                                    if let AudioQueryState::Finished(aq) = &mut aq.state {
-                                        crate::right_pane::render_synthesis_control(aq, ui);
+                                    if let Some(aq) = &audio_item.query {
+                                        if let Some(mut x) =
+                                            crate::right_pane::render_synthesis_control(
+                                                aq,
+                                                &self.current_selected_tts_line,
+                                                ui,
+                                            )
+                                        {
+                                            invocations.push(Box::new(x));
+                                        }
                                     }
                                 }
                             },
@@ -198,30 +250,56 @@ impl eframe::App for VoiceVoxRust {
 
                             egui::ScrollArea::vertical().show(ui, |ui| {
                                 ui.set_min_width(available_with);
-                                let len = self.tts_lines.len();
-                                for (line, tts_line) in self.tts_lines.iter_mut().enumerate() {
+                                let len = self.histories.project.audioItems.len();
+                                for line in self.histories.project.audioKeys.iter() {
+                                    let tts_line =
+                                        self.histories.project.audioItems.get(line).unwrap();
+
                                     ui.horizontal(|ui| {
-                                        let mut ccb = chara_change_button::CharaChangeButton::new(
-                                            &tts_line.character_and_style.0,
-                                            &tts_line.character_and_style.1,
+                                        let mut ccb = chara_change_button::CharaChangeButton(
+                                            tts_line.styleId,
                                         );
-                                        let chara_change_notify = ccb.ui(ui, ctx);
 
-                                        let res = ui.text_edit_singleline(&mut tts_line.text);
+                                        let chara_change_notify = ccb.ui(line, ui, ctx);
 
-                                        if res.has_focus() {
-                                            self.current_selected_tts_line = line;
+                                        let res =if self.current_selected_tts_line.eq(line) {
+                                            ui.text_edit_singleline(&mut self.tts_line_buffer.0)
+                                        }else{
+                                            let mut dt =tts_line.text.clone();
+                                            ui.text_edit_singleline(&mut dt)
+                                        };
+
+                                        if self.tts_line_buffer.0 != self.tts_line_buffer.1 {
+                                            log::debug!("send update text buffer command");
+                                            invocations.push(Box::new(
+                                                crate::project::UpdateTextCommand::new(
+                                                    line.clone(),
+                                                    self.tts_line_buffer.0.clone(),
+                                                ),
+                                            ));
+                                            self.tts_line_buffer.1 = self.tts_line_buffer.0.clone();
+                                        }
+
+                                        //フォーカスを得たらラインバッファを履歴から取得
+                                        if res.gained_focus() {
+                                            self.current_selected_tts_line = line.clone();
+                                            self.tts_line_buffer.0 = tts_line.text.clone();
+                                            self.tts_line_buffer.1 = tts_line.text.clone();
                                         }
                                         //フォーカスを失ったら合成リクエストを送る.
                                         if res.lost_focus()
                                             && !tts_line.text.is_empty()
-                                            && tts_line.back_up != tts_line.text
                                         {
+                                            log::debug!("send audio query request for {}",line);
                                             let text = tts_line.text.clone();
-                                            tts_line.back_up = text.clone();
-                                            let speaker = tts_line.speaker_in_audio_query;
+                                            self.tts_line_buffer.1 = text.clone();
+                                            let speaker = tts_line.styleId;
                                             let (tx, rx) = tokio::sync::oneshot::channel();
-                                            tts_line.state = AudioQueryState::WaitingForQuery(rx);
+
+                                            self.audio_query_jobs.insert(
+                                                line.clone(),
+                                                AudioQueryState::WaitingForQuery(rx),
+                                            );
                                             tokio::spawn(async move {
                                                 tx.send(
                                                     api::AudioQuery {
@@ -234,6 +312,9 @@ impl eframe::App for VoiceVoxRust {
                                                 )
                                                 .unwrap();
                                             });
+                                            self.current_selected_tts_line.clear();
+                                            self.tts_line_buffer.0.clear();
+                                            self.tts_line_buffer.1.clear();
                                         }
                                         if len > 1 {
                                             if ui.button("X").clicked() {
@@ -241,30 +322,32 @@ impl eframe::App for VoiceVoxRust {
                                             }
                                         }
                                         if let Some(ccn) = chara_change_notify {
-                                            log::debug!(
-                                                "set character and style {} {}",
-                                                ccn.0,
-                                                ccn.1
-                                            );
-                                            tts_line.speaker_in_audio_query = ccn.2;
-                                            tts_line.character_and_style =
-                                                (ccn.0.to_owned(), ccn.1.to_owned());
+                                            invocations.push(Box::new(ccn));
                                         }
-                                        if let AudioQueryState::WaitingForQuery(ref mut ac) =
-                                            tts_line.state
-                                        {
-                                            if let Ok(aq) = ac.try_recv() {
-                                                match aq {
-                                                    Ok(aq) => {
-                                                        tts_line.state =
-                                                            AudioQueryState::Finished(aq);
+                                        if let Some(job) = self.audio_query_jobs.get_mut(line) {
+                                            if let AudioQueryState::WaitingForQuery(ref mut ac) =
+                                                job
+                                            {
+                                                if let Ok(aq) = ac.try_recv() {
+                                                    match aq {
+                                                        Ok(aq) => {
+                                                            *job = AudioQueryState::Finished(aq);
+                                                        }
+                                                        Err(_) => {
+                                                            *job = AudioQueryState::Failed;
+                                                        }
                                                     }
-                                                    Err(_) => {
-                                                        tts_line.state = AudioQueryState::Failed;
-                                                    }
+                                                } else {
+                                                    ui.spinner();
                                                 }
-                                            } else {
-                                                ui.spinner();
+                                            } else if let AudioQueryState::Finished(aq) = job {
+                                                invocations.push(Box::new(
+                                                    AudioQueryCommands::UpdateAccentPhrases(
+                                                        line.clone(),
+                                                        aq.clone(),
+                                                    ),
+                                                ));
+                                                *job = AudioQueryState::NoJob;
                                             }
                                         }
                                     });
@@ -292,22 +375,29 @@ impl eframe::App for VoiceVoxRust {
                             );
 
                             if response.clicked() {
-                                self.tts_lines.push(TTS {
-                                    character_and_style: (
-                                        "四国めたん".to_string(),
-                                        "ノーマル".to_string(),
-                                    ),
-                                    speaker_in_audio_query: 2,
-                                    text: "".to_string(),
-                                    back_up: "".to_string(),
-                                    state: AudioQueryState::NoJob,
-                                })
+                                let uuid = uuid::Uuid::new_v4().to_string();
+                                log::debug!("new uuid {}",uuid);
+                                invocations.push(Box::new(AudioQueryCommands::Insert(
+                                    uuid,
+                                    crate::project::AudioItem {
+                                        text: "".to_string(),
+                                        styleId: 2,
+                                        query: None,
+                                        presetKey: None,
+                                    },
+                                )));
                             }
                         });
                     });
                 });
                 if let Some(delete_line) = should_delete {
-                    self.tts_lines.remove(delete_line);
+                    invocations.push(Box::new(AudioQueryCommands::Remove(
+                        delete_line.clone(),
+                        None,
+                    )));
+                }
+                for invocation in invocations {
+                    self.histories.invoke(invocation)
                 }
             }
             CurrentView::ToolBarCustomize => {
