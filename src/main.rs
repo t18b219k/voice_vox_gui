@@ -119,8 +119,8 @@ impl Command for AudioQueryCommands {
     fn invoke(&mut self, project: &mut VoiceVoxProject) {
         match self {
             AudioQueryCommands::Remove(key, ref mut save) => {
-                let pos =project.audioKeys.iter().enumerate().find(|x|{x.1==key});
-                if let Some((index,_))=pos{
+                let pos = project.audioKeys.iter().enumerate().find(|x| x.1 == key);
+                if let Some((index, _)) = pos {
                     project.audioKeys.remove(index);
                 }
                 if let Some(value) = project.audioItems.remove(key) {
@@ -145,7 +145,7 @@ impl Command for AudioQueryCommands {
         }
     }
 
-    fn undo(&mut self, project: &mut VoiceVoxProject) {
+    fn undo(&mut self, _project: &mut VoiceVoxProject) {
         todo!()
     }
 }
@@ -231,7 +231,7 @@ impl eframe::App for VoiceVoxRust {
                                     .get(&self.current_selected_tts_line)
                                 {
                                     if let Some(aq) = &audio_item.query {
-                                        if let Some(mut x) =
+                                        if let Some(x) =
                                             crate::right_pane::render_synthesis_control(
                                                 aq,
                                                 &self.current_selected_tts_line,
@@ -256,16 +256,16 @@ impl eframe::App for VoiceVoxRust {
                                         self.histories.project.audioItems.get(line).unwrap();
 
                                     ui.horizontal(|ui| {
-                                        let mut ccb = chara_change_button::CharaChangeButton(
+                                        let ccb = chara_change_button::CharaChangeButton(
                                             tts_line.styleId,
                                         );
 
                                         let chara_change_notify = ccb.ui(line, ui, ctx);
 
-                                        let res =if self.current_selected_tts_line.eq(line) {
+                                        let res = if self.current_selected_tts_line.eq(line) {
                                             ui.text_edit_singleline(&mut self.tts_line_buffer.0)
-                                        }else{
-                                            let mut dt =tts_line.text.clone();
+                                        } else {
+                                            let mut dt = tts_line.text.clone();
                                             ui.text_edit_singleline(&mut dt)
                                         };
 
@@ -287,10 +287,8 @@ impl eframe::App for VoiceVoxRust {
                                             self.tts_line_buffer.1 = tts_line.text.clone();
                                         }
                                         //フォーカスを失ったら合成リクエストを送る.
-                                        if res.lost_focus()
-                                            && !tts_line.text.is_empty()
-                                        {
-                                            log::debug!("send audio query request for {}",line);
+                                        if res.lost_focus() && !tts_line.text.is_empty() {
+                                            log::debug!("send audio query request for {}", line);
                                             let text = tts_line.text.clone();
                                             self.tts_line_buffer.1 = text.clone();
                                             let speaker = tts_line.styleId;
@@ -376,7 +374,7 @@ impl eframe::App for VoiceVoxRust {
 
                             if response.clicked() {
                                 let uuid = uuid::Uuid::new_v4().to_string();
-                                log::debug!("new uuid {}",uuid);
+                                log::debug!("new uuid {}", uuid);
                                 invocations.push(Box::new(AudioQueryCommands::Insert(
                                     uuid,
                                     crate::project::AudioItem {
