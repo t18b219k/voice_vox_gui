@@ -61,18 +61,25 @@ impl HistoryManager {
     pub fn invoke(&mut self, mut command: Box<dyn Command>) {
         command.invoke(&mut self.project);
         self.redo_stack.clear();
+        log::debug!("exec {}", command.op_name());
         self.undo_stack.push(command);
     }
     pub fn undo(&mut self) {
         if let Some(mut op) = self.undo_stack.pop() {
             op.undo(&mut self.project);
+            log::debug!("revert {}", op.op_name());
             self.redo_stack.push(op);
+        } else {
+            log::debug!("no more in undo stack")
         }
     }
     pub fn redo(&mut self) {
         if let Some(mut op) = self.redo_stack.pop() {
             op.redo(&mut self.project);
+            log::debug!("redo {}", op.op_name());
             self.undo_stack.push(op);
+        } else {
+            log::debug!("no more in redo stack.");
         }
     }
 }

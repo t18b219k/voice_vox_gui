@@ -28,21 +28,6 @@ impl UpdateTextCommand {
     }
 }
 
-impl crate::history::Command for UpdateTextCommand {
-    fn invoke(&mut self, project: &mut VoiceVoxProject) {
-        if let Some(ai) = project.audioItems.get_mut(&self.uuid) {
-            self.prev_text = ai.text.clone();
-            ai.text = self.new_text.clone();
-        }
-    }
-
-    fn undo(&mut self, project: &mut VoiceVoxProject) {
-        if let Some(ai) = project.audioItems.get_mut(&self.uuid) {
-            ai.text = self.prev_text.clone();
-        }
-    }
-}
-
 const DEFAULT_SAMPLING_RATE: i64 = 24000;
 
 pub struct AudioState {

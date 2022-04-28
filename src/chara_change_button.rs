@@ -125,11 +125,6 @@ impl CharaChangeButton {
                                                         format!("{}({})", character, style),
                                                     );
                                                     if ui.add(style_button).clicked() {
-                                                        log::debug!(
-                                                            "emit character select ({},{})",
-                                                            &character,
-                                                            &style
-                                                        );
                                                         rt = Some(CharaChangeCommand {
                                                             line: line.clone(),
                                                             prev_chara: self.0,
@@ -143,11 +138,6 @@ impl CharaChangeButton {
                                     .response
                                     .clicked()
                                 {
-                                    log::debug!(
-                                        "emit character select ({},{})",
-                                        &character,
-                                        &default_style
-                                    );
                                     rt = Some(CharaChangeCommand {
                                         line: line.clone(),
                                         prev_chara: self.0,
@@ -156,11 +146,6 @@ impl CharaChangeButton {
                                 }
                             } else {
                                 if ui.add(default_style_button).clicked() {
-                                    log::debug!(
-                                        "emit character select ({},{})",
-                                        &character,
-                                        &default_style
-                                    );
                                     rt = Some(CharaChangeCommand {
                                         line: line.clone(),
                                         prev_chara: self.0,
@@ -173,14 +158,20 @@ impl CharaChangeButton {
                 }
             },
         );
-        rt
+        rt.and_then(|rt| {
+            if rt.new_chara == rt.prev_chara {
+                None
+            } else {
+                Some(rt)
+            }
+        })
     }
 }
 
 pub struct CharaChangeCommand {
     line: String,
-    prev_chara: i32,
-    new_chara: i32,
+    pub prev_chara: i32,
+    pub new_chara: i32,
 }
 
 impl Command for CharaChangeCommand {
@@ -194,5 +185,8 @@ impl Command for CharaChangeCommand {
         if let Some(audio_item) = project.audioItems.get_mut(&self.line) {
             audio_item.styleId = self.prev_chara;
         }
+    }
+    fn op_name(&self) -> &str {
+        "キャラクター変更"
     }
 }

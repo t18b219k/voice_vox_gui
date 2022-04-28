@@ -2,6 +2,17 @@ use eframe::egui::{Color32, Context, FontFamily, Layout, Stroke};
 use eframe::epi::Frame;
 use eframe::{CreationContext, NativeOptions};
 
+use crate::api::Api;
+
+use crate::dialogue::ExitControl;
+use crate::history::Command;
+use crate::menu::TopMenuOp;
+use crate::project::VoiceVoxProject;
+use crate::tool_bar::ToolBarOp;
+use eframe::egui;
+use std::collections::HashMap;
+use tokio::sync::oneshot::Receiver;
+
 mod api;
 mod api_schema;
 mod bottom_pane;
@@ -29,9 +40,25 @@ struct VoiceVoxRust {
     block_menu_control: bool,
     opening_dialogues: Option<DialogueKind>,
     current_selected_tts_line: String,
-    tts_line_buffer: (String, String),
+    back_up_text: String,
     histories: crate::history::HistoryManager,
     audio_query_jobs: HashMap<String, AudioQueryState>,
+}
+
+static BLANK_AUDIO_QUERY: once_cell::race::OnceBox<api_schema::AudioQuery> =
+    once_cell::race::OnceBox::new();
+
+async fn init_blank_audio_query() {
+    let blank_query = api::AudioQuery {
+        text: "".to_string(),
+        speaker: 2,
+        core_version: None,
+    }
+    .call()
+    .await
+    .unwrap();
+    BLANK_AUDIO_QUERY.set(Box::new(blank_query)).unwrap();
+    log::debug!("initialized blank audio query.")
 }
 
 enum CurrentView {
@@ -57,7 +84,7 @@ impl VoiceVoxRust {
             block_menu_control: false,
             opening_dialogues: None,
             current_selected_tts_line: String::new(),
-            tts_line_buffer: (String::new(), String::new()),
+            back_up_text: "".to_string(),
             histories: crate::history::HistoryManager::new().await,
             audio_query_jobs: Default::default(),
         }
@@ -84,45 +111,34 @@ impl VoiceVoxRust {
         cc.egui_ctx.set_fonts(fonts);
     }
 }
-use crate::api::Api;
-
-use crate::dialogue::ExitControl;
-use crate::history::Command;
-use crate::menu::TopMenuOp;
-use crate::project::VoiceVoxProject;
-use crate::tool_bar::ToolBarOp;
-use eframe::egui;
-use std::collections::HashMap;
-use tokio::sync::oneshot::Receiver;
-
-struct TTS {
-    character_and_style: (String, String),
-    speaker_in_audio_query: i64,
-    text: String,
-    back_up: String,
-    state: AudioQueryState,
-}
 
 enum AudioQueryState {
-    WaitingForQuery(Receiver<<crate::api::AudioQuery as Api>::Response>),
+    WaitingForQuery(String, Receiver<<crate::api::AudioQuery as Api>::Response>),
     NoJob,
-    Finished(api_schema::AudioQuery),
+    Finished(String, api_schema::AudioQuery),
     Failed,
 }
 
 enum AudioQueryCommands {
-    Remove(String, Option<project::AudioItem>),
+    Remove(String, usize, Option<project::AudioItem>),
     Insert(String, project::AudioItem),
-    UpdateAccentPhrases(String, api_schema::AudioQuery),
+    UpdateAccentPhrases {
+        uuid: String,
+        new_text: String,
+        prev_text: String,
+        accent_phrases: Vec<api_schema::AccentPhrase>,
+    },
 }
 impl Command for AudioQueryCommands {
     fn invoke(&mut self, project: &mut VoiceVoxProject) {
         match self {
-            AudioQueryCommands::Remove(key, ref mut save) => {
+            AudioQueryCommands::Remove(key, pos_save, ref mut save) => {
                 let pos = project.audioKeys.iter().enumerate().find(|x| x.1 == key);
                 if let Some((index, _)) = pos {
                     project.audioKeys.remove(index);
+                    *pos_save = index;
                 }
+
                 if let Some(value) = project.audioItems.remove(key) {
                     save.replace(value);
                 }
@@ -133,26 +149,68 @@ impl Command for AudioQueryCommands {
                 }
                 project.audioItems.insert(key.clone(), value.clone());
             }
-            AudioQueryCommands::UpdateAccentPhrases(key, update) => {
-                if let Some(ai) = project.audioItems.get_mut(key) {
+            AudioQueryCommands::UpdateAccentPhrases {
+                uuid,
+                new_text,
+                prev_text,
+                accent_phrases,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    ai.text = new_text.clone();
+                    log::debug!("{} text {} -> {}", uuid, prev_text, ai.text);
                     if let Some(aq) = &mut ai.query {
-                        let ap_backup = aq.accent_phrases.clone();
-                        aq.accent_phrases = update.accent_phrases.clone();
-                        update.accent_phrases = ap_backup;
+                        std::mem::swap(&mut aq.accent_phrases, accent_phrases);
+                        log::debug!("swapped {} accent_phrases", uuid);
                     }
                 }
             }
         }
     }
 
-    fn undo(&mut self, _project: &mut VoiceVoxProject) {
-        todo!()
+    fn undo(&mut self, project: &mut VoiceVoxProject) {
+        match self {
+            AudioQueryCommands::Remove(key, pos, save) => {
+                project.audioKeys.insert(*pos, key.to_owned());
+
+                if let Some(record) = save {
+                    project.audioItems.insert(key.to_owned(), record.clone());
+                }
+                *save = None;
+            }
+            AudioQueryCommands::Insert(x, _) => {
+                if project.audioKeys.contains(x) {
+                    project.audioKeys.pop();
+                    project.audioItems.remove(x);
+                }
+            }
+            AudioQueryCommands::UpdateAccentPhrases {
+                uuid,
+                new_text,
+                prev_text,
+                accent_phrases,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    ai.text = prev_text.clone();
+                    log::debug!("{} text {} -> {}", uuid, new_text, prev_text);
+                    if let Some(aq) = &mut ai.query {
+                        std::mem::swap(&mut aq.accent_phrases, accent_phrases);
+                        log::debug!("swapped {} accent_phrases", uuid);
+                    }
+                }
+            }
+        }
+    }
+    fn op_name(&self) -> &str {
+        match self {
+            AudioQueryCommands::Remove(_, _, _) => "行削除",
+            AudioQueryCommands::Insert(_, _) => "行挿入",
+            AudioQueryCommands::UpdateAccentPhrases { .. } => "テキスト/波形変更",
+        }
     }
 }
 
 impl eframe::App for VoiceVoxRust {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
-        let mut should_delete = None;
         frame.set_window_title(&format!(
             "{} VoiceVox",
             self.opening_file.as_ref().unwrap_or(&"*".to_owned())
@@ -197,7 +255,26 @@ impl eframe::App for VoiceVoxRust {
                 egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |_ui| {});
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical(|ui| {
-                        crate::tool_bar::tool_bar(ui, &self.tool_bar_config, 28.0, false);
+                        if let Some(toolbar_op) =
+                            crate::tool_bar::tool_bar(ui, &self.tool_bar_config, 28.0, false)
+                        {
+                            match toolbar_op {
+                                ToolBarOp::PlayAll => {}
+                                ToolBarOp::Stop => {}
+                                ToolBarOp::ExportSelected => {}
+                                ToolBarOp::ExportAll => {}
+                                ToolBarOp::ExportAllInOneFile => {}
+                                ToolBarOp::SaveProject => {}
+                                ToolBarOp::Undo => {
+                                    self.histories.undo();
+                                }
+                                ToolBarOp::Redo => {
+                                    self.histories.redo();
+                                }
+                                ToolBarOp::LoadText => {}
+                                ToolBarOp::Blank => {}
+                            }
+                        }
                         egui::containers::SidePanel::left("chara_view").show_inside(ui, |ui| {
                             if let Some(portrait_line) = self
                                 .histories
@@ -253,7 +330,7 @@ impl eframe::App for VoiceVoxRust {
                                 let len = self.histories.project.audioItems.len();
                                 for line in self.histories.project.audioKeys.iter() {
                                     let tts_line =
-                                        self.histories.project.audioItems.get(line).unwrap();
+                                        self.histories.project.audioItems.get_mut(line).unwrap();
 
                                     ui.horizontal(|ui| {
                                         let ccb = chara_change_button::CharaChangeButton(
@@ -263,45 +340,33 @@ impl eframe::App for VoiceVoxRust {
                                         let chara_change_notify = ccb.ui(line, ui, ctx);
 
                                         let res = if self.current_selected_tts_line.eq(line) {
-                                            ui.text_edit_singleline(&mut self.tts_line_buffer.0)
+                                            ui.text_edit_singleline(&mut tts_line.text)
                                         } else {
                                             let mut dt = tts_line.text.clone();
                                             ui.text_edit_singleline(&mut dt)
                                         };
-
-                                        if self.tts_line_buffer.0 != self.tts_line_buffer.1 {
-                                            log::debug!("send update text buffer command");
-                                            invocations.push(Box::new(
-                                                crate::project::UpdateTextCommand::new(
-                                                    line.clone(),
-                                                    self.tts_line_buffer.0.clone(),
-                                                ),
-                                            ));
-                                            self.tts_line_buffer.1 = self.tts_line_buffer.0.clone();
-                                        }
-
                                         //フォーカスを得たらラインバッファを履歴から取得
                                         if res.gained_focus() {
+                                            self.back_up_text = tts_line.text.clone();
+                                        }
+
+                                        if res.has_focus() {
                                             self.current_selected_tts_line = line.clone();
-                                            self.tts_line_buffer.0 = tts_line.text.clone();
-                                            self.tts_line_buffer.1 = tts_line.text.clone();
                                         }
                                         //フォーカスを失ったら合成リクエストを送る.
                                         if res.lost_focus() && !tts_line.text.is_empty() {
                                             log::debug!("send audio query request for {}", line);
-                                            let text = tts_line.text.clone();
-                                            self.tts_line_buffer.1 = text.clone();
                                             let speaker = tts_line.styleId;
                                             let (tx, rx) = tokio::sync::oneshot::channel();
-
+                                            let text = tts_line.text.clone();
                                             self.audio_query_jobs.insert(
                                                 line.clone(),
-                                                AudioQueryState::WaitingForQuery(rx),
+                                                AudioQueryState::WaitingForQuery(text.clone(), rx),
                                             );
                                             tokio::spawn(async move {
                                                 tx.send(
                                                     api::AudioQuery {
-                                                        text,
+                                                        text: text.clone(),
                                                         speaker,
                                                         core_version: None,
                                                     }
@@ -310,26 +375,59 @@ impl eframe::App for VoiceVoxRust {
                                                 )
                                                 .unwrap();
                                             });
-                                            self.current_selected_tts_line.clear();
-                                            self.tts_line_buffer.0.clear();
-                                            self.tts_line_buffer.1.clear();
                                         }
                                         if len > 1 {
                                             if ui.button("X").clicked() {
-                                                should_delete = Some(line);
+                                                invocations.push(Box::new(
+                                                    AudioQueryCommands::Remove(
+                                                        line.clone(),
+                                                        0,
+                                                        None,
+                                                    ),
+                                                ));
                                             }
                                         }
                                         if let Some(ccn) = chara_change_notify {
+                                            let style_id = ccn.new_chara;
                                             invocations.push(Box::new(ccn));
+
+                                            log::debug!(
+                                                "send audio query request for {} with id {}.",
+                                                line,
+                                                style_id
+                                            );
+                                            let (tx, rx) = tokio::sync::oneshot::channel();
+                                            let text = tts_line.text.clone();
+                                            self.audio_query_jobs.insert(
+                                                line.clone(),
+                                                AudioQueryState::WaitingForQuery(text.clone(), rx),
+                                            );
+                                            tokio::spawn(async move {
+                                                tx.send(
+                                                    api::AudioQuery {
+                                                        text: text.clone(),
+                                                        speaker: style_id,
+                                                        core_version: None,
+                                                    }
+                                                    .call()
+                                                    .await,
+                                                )
+                                                .unwrap();
+                                            });
                                         }
                                         if let Some(job) = self.audio_query_jobs.get_mut(line) {
-                                            if let AudioQueryState::WaitingForQuery(ref mut ac) =
-                                                job
+                                            if let AudioQueryState::WaitingForQuery(
+                                                text,
+                                                ref mut ac,
+                                            ) = job
                                             {
                                                 if let Ok(aq) = ac.try_recv() {
                                                     match aq {
                                                         Ok(aq) => {
-                                                            *job = AudioQueryState::Finished(aq);
+                                                            *job = AudioQueryState::Finished(
+                                                                text.clone(),
+                                                                aq,
+                                                            );
                                                         }
                                                         Err(_) => {
                                                             *job = AudioQueryState::Failed;
@@ -338,13 +436,18 @@ impl eframe::App for VoiceVoxRust {
                                                 } else {
                                                     ui.spinner();
                                                 }
-                                            } else if let AudioQueryState::Finished(aq) = job {
+                                            } else if let AudioQueryState::Finished(text, aq) = job
+                                            {
+                                                //inspect history.
                                                 invocations.push(Box::new(
-                                                    AudioQueryCommands::UpdateAccentPhrases(
-                                                        line.clone(),
-                                                        aq.clone(),
-                                                    ),
+                                                    AudioQueryCommands::UpdateAccentPhrases {
+                                                        uuid: line.clone(),
+                                                        new_text: text.clone(),
+                                                        accent_phrases: aq.accent_phrases.clone(),
+                                                        prev_text: self.back_up_text.clone(),
+                                                    },
                                                 ));
+
                                                 *job = AudioQueryState::NoJob;
                                             }
                                         }
@@ -380,7 +483,7 @@ impl eframe::App for VoiceVoxRust {
                                     crate::project::AudioItem {
                                         text: "".to_string(),
                                         styleId: 2,
-                                        query: None,
+                                        query: BLANK_AUDIO_QUERY.get().cloned(),
                                         presetKey: None,
                                     },
                                 )));
@@ -388,12 +491,7 @@ impl eframe::App for VoiceVoxRust {
                         });
                     });
                 });
-                if let Some(delete_line) = should_delete {
-                    invocations.push(Box::new(AudioQueryCommands::Remove(
-                        delete_line.clone(),
-                        None,
-                    )));
-                }
+
                 for invocation in invocations {
                     self.histories.invoke(invocation)
                 }
@@ -577,6 +675,7 @@ impl eframe::App for VoiceVoxRust {
 async fn main() {
     simple_log::console("debug").unwrap();
     api::init();
+    init_blank_audio_query().await;
     chara_change_button::init_icon_store().await;
     let mut app = VoiceVoxRust::new().await;
 
