@@ -28,20 +28,20 @@ pub struct AudioQuery {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AccentPhrase {
-    moras: Vec<Mora>,
-    accent: i32,
-    pause_mora: Option<Mora>,
-    is_interrogative: Option<bool>,
+    pub moras: Vec<Mora>,
+    pub accent: i32,
+    pub pause_mora: Option<Mora>,
+    pub is_interrogative: Option<bool>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Mora {
-    text: String,
-    consonant: Option<String>,
-    consonant_length: Option<f32>,
-    vowel: String,
-    vowel_length: f32,
-    pitch: f32,
+    pub text: String,
+    pub consonant: Option<String>,
+    pub consonant_length: Option<f32>,
+    pub vowel: String,
+    pub vowel_length: f32,
+    pub pitch: f32,
 }
 
 #[allow(non_snake_case)]

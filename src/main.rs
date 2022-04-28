@@ -4,6 +4,7 @@ use eframe::{CreationContext, NativeOptions};
 
 use crate::api::Api;
 
+use crate::bottom_pane::Displaying;
 use crate::dialogue::ExitControl;
 use crate::history::Command;
 use crate::menu::TopMenuOp;
@@ -43,6 +44,8 @@ struct VoiceVoxRust {
     back_up_text: String,
     histories: crate::history::HistoryManager,
     audio_query_jobs: HashMap<String, AudioQueryState>,
+    current_displaying: crate::bottom_pane::Displaying,
+    playing: bool,
 }
 
 static BLANK_AUDIO_QUERY: once_cell::race::OnceBox<api_schema::AudioQuery> =
@@ -87,8 +90,11 @@ impl VoiceVoxRust {
             back_up_text: "".to_string(),
             histories: crate::history::HistoryManager::new().await,
             audio_query_jobs: Default::default(),
+            current_displaying: Displaying::Accent,
+            playing: false,
         }
     }
+
     fn setup(&mut self, cc: &CreationContext) {
         let mut fonts = egui::FontDefinitions::default();
 
@@ -200,6 +206,7 @@ impl Command for AudioQueryCommands {
             }
         }
     }
+
     fn op_name(&self) -> &str {
         match self {
             AudioQueryCommands::Remove(_, _, _) => "行削除",
@@ -252,7 +259,23 @@ impl eframe::App for VoiceVoxRust {
             CurrentView::Main => {
                 let mut invocations: Vec<Box<dyn Command>> = vec![];
 
-                egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |_ui| {});
+                egui::containers::TopBottomPanel::bottom("voice_control").show(ctx, |ui| {
+                    if let Some(ai) = self
+                        .histories
+                        .project
+                        .audioItems
+                        .get(&self.current_selected_tts_line)
+                    {
+                        if let Some(query) = &ai.query {
+                            crate::bottom_pane::create_bottom_pane(
+                                &mut self.current_displaying,
+                                &mut self.playing,
+                                ui,
+                                &query.accent_phrases,
+                            );
+                        }
+                    }
+                });
                 egui::containers::CentralPanel::default().show(ctx, |ui| {
                     ui.vertical(|ui| {
                         if let Some(toolbar_op) =
