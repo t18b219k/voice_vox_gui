@@ -51,7 +51,7 @@ impl HistoryManager {
             undo_stack: vec![],
             redo_stack: vec![],
             project: VoiceVoxProject {
-                appVersion: "".to_string(),
+                appVersion: "0.11.4".to_string(),
                 audioKeys: vec![dummy],
                 audioItems: items,
             },

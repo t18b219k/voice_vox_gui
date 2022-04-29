@@ -1,7 +1,7 @@
 use crate::api_schema::AccentPhrase;
 use crate::history::Command;
 use crate::project::VoiceVoxProject;
-use eframe::egui::{FontId, SelectableLabel, Ui, Vec2};
+use eframe::egui::{FontId, Response, SelectableLabel, Ui, Vec2, Widget};
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 pub enum Displaying {
@@ -14,8 +14,10 @@ pub fn create_bottom_pane(
     current_displaying: &mut Displaying,
     playing: &mut bool,
     ui: &mut Ui,
-    _edit_target: &[AccentPhrase],
+    uuid: &str,
+    edit_targets: &[AccentPhrase],
 ) -> Option<BottomPaneCommand> {
+    let mut rt = None;
     ui.horizontal(|ui| {
         use eframe::egui::{vec2, Color32, Rounding, Sense, Stroke};
         use Displaying::*;
@@ -98,12 +100,93 @@ pub fn create_bottom_pane(
 
         ui.separator();
         match current_displaying {
-            Displaying::Accent => {}
-            Displaying::Intonation => {}
+            Displaying::Accent => {
+                let mut space = ui.spacing().item_spacing;
+                space.y = ui.available_height();
+                space.x *= 2.0;
+                let accent_phrase_len = edit_targets.len();
+                if !edit_targets.is_empty() {
+                    ui.horizontal(|ui| {
+                        for (ap, edit_target) in edit_targets.iter().enumerate() {
+                            let mut accent = edit_target.accent;
+                            let mora_len = edit_target.moras.len();
+                            let width = mora_len as f32 * space.x;
+                            let slider =
+                                eframe::egui::Slider::new(&mut accent, 1..=mora_len as i32)
+                                    .integer();
+                            let res = ui.add_sized(vec2(width, 16.0), slider);
+                            if (res.clicked() | res.drag_released())
+                                & (accent != edit_target.accent)
+                            {
+                                //emit signal.
+                                rt = Some(BottomPaneCommand::AccentPhrase {
+                                    uuid: uuid.to_owned(),
+                                    accent_phrase: ap,
+                                    new_accent: accent as usize,
+                                    prev_accent: edit_target.accent as usize,
+                                });
+                            }
+
+                            if ap < accent_phrase_len - 1 {
+                                let button = eframe::egui::Button::new("");
+                                if ui.add_sized(space, button).clicked() {
+                                    rt = Some(BottomPaneCommand::Concat {
+                                        uuid: uuid.to_owned(),
+                                        accent_phrase: ap,
+                                        length: mora_len,
+                                    });
+                                }
+                            }
+                        }
+                    });
+                }
+            }
+            Displaying::Intonation => {
+                let mut space = ui.spacing().item_spacing;
+                space.y = ui.available_height();
+                space.x *= 2.0;
+                let accent_phrase_len = edit_targets.len();
+                if !edit_targets.is_empty() {
+                    ui.horizontal(|ui| {
+                        for (ap, edit_target) in edit_targets.iter().enumerate() {
+                            let mora_len = edit_target.moras.len();
+                            for (index, mora) in edit_target.moras.iter().enumerate() {
+                                let mut pitch = mora.pitch;
+                                let slider = eframe::egui::Slider::new(&mut pitch, 3.0..=6.5)
+                                    .vertical()
+                                    .text(&mora.text);
+                                let res = ui.add(slider);
+
+                                if (res.clicked() | res.drag_released())
+                                    & ((pitch - mora.pitch).abs() > f32::EPSILON)
+                                {
+                                    //emit signal.
+                                    rt = Some(BottomPaneCommand::Pitch {
+                                        uuid: uuid.to_owned(),
+                                        accent_phrase: ap,
+                                        mora: index,
+                                        pitch_diff: pitch - mora.pitch,
+                                    });
+                                }
+                            }
+                            if ap < accent_phrase_len - 1 {
+                                let button = eframe::egui::Button::new("");
+                                if ui.add_sized(space, button).clicked() {
+                                    rt = Some(BottomPaneCommand::Concat {
+                                        uuid: uuid.to_owned(),
+                                        accent_phrase: ap,
+                                        length: mora_len,
+                                    });
+                                }
+                            }
+                        }
+                    });
+                }
+            }
             Displaying::Length => {}
         }
     });
-    None
+    rt
 }
 
 pub enum BottomPaneCommand {
@@ -133,6 +216,19 @@ pub enum BottomPaneCommand {
         uuid: String,
         accent_phrase: usize,
         mora: usize,
+    },
+
+    AccentPhrase {
+        uuid: String,
+        accent_phrase: usize,
+        new_accent: usize,
+        prev_accent: usize,
+    },
+    Pitch {
+        uuid: String,
+        accent_phrase: usize,
+        mora: usize,
+        pitch_diff: f32,
     },
 }
 
@@ -170,6 +266,30 @@ impl Command for BottomPaneCommand {
                             is_interrogative: None,
                         };
                         aq.accent_phrases.insert(*index + 1, insert);
+                    }
+                }
+            }
+            BottomPaneCommand::AccentPhrase {
+                uuid,
+                accent_phrase,
+                new_accent,
+                prev_accent,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    if let Some(aq) = &mut ai.query {
+                        aq.accent_phrases[*accent_phrase].accent = *new_accent as i32;
+                    }
+                }
+            }
+            BottomPaneCommand::Pitch {
+                uuid,
+                accent_phrase,
+                mora,
+                pitch_diff,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    if let Some(aq) = &mut ai.query {
+                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch += *pitch_diff;
                     }
                 }
             }
@@ -212,6 +332,30 @@ impl Command for BottomPaneCommand {
                     }
                 }
             }
+            BottomPaneCommand::AccentPhrase {
+                uuid,
+                accent_phrase,
+                new_accent,
+                prev_accent,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    if let Some(aq) = &mut ai.query {
+                        aq.accent_phrases[*accent_phrase].accent = *prev_accent as i32;
+                    }
+                }
+            }
+            BottomPaneCommand::Pitch {
+                uuid,
+                accent_phrase,
+                mora,
+                pitch_diff,
+            } => {
+                if let Some(ai) = project.audioItems.get_mut(uuid) {
+                    if let Some(aq) = &mut ai.query {
+                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch -= *pitch_diff;
+                    }
+                }
+            }
         }
     }
 
@@ -219,6 +363,48 @@ impl Command for BottomPaneCommand {
         match self {
             BottomPaneCommand::Concat { .. } => "アクセントフレーズ連結",
             BottomPaneCommand::Split { .. } => "アクセントフレーズ分割",
+            BottomPaneCommand::AccentPhrase { .. } => "アクセント位置変更",
+            BottomPaneCommand::Pitch { .. } => "ピッチ変更",
         }
+    }
+}
+
+pub struct TwoNotchSlider<'a> {
+    pub a: &'a mut f32,
+    pub b: &'a mut f32,
+}
+
+impl<'a> Widget for TwoNotchSlider<'a> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        use eframe::egui;
+        use egui::epaint::{pos2, vec2, Color32, Rect, Stroke};
+        use egui::Sense;
+        //left half size.
+        let size_of_notch = vec2(8.0, 16.0);
+        let origin = ui.clip_rect().min;
+        let height = ui.available_height();
+
+        let painter = ui.painter_at(Rect::from_min_max(
+            origin,
+            origin + vec2(size_of_notch.x * 2.0, height),
+        ));
+
+        let res_left = ui.allocate_rect(
+            Rect::from_min_max(origin, origin + vec2(size_of_notch.x, height)),
+            Sense::click_and_drag(),
+        );
+        let right_origin = origin + vec2(size_of_notch.x, 0.0);
+        let res_right = ui.allocate_rect(
+            Rect::from_min_max(right_origin, right_origin + vec2(size_of_notch.x, height)),
+            Sense::click_and_drag(),
+        );
+
+        painter.vline(
+            origin.x + size_of_notch.x,
+            origin.y..=origin.y + height,
+            Stroke::new(size_of_notch.x / 4.0, Color32::GRAY),
+        );
+
+        res_left.union(res_right)
     }
 }

@@ -267,12 +267,15 @@ impl eframe::App for VoiceVoxRust {
                         .get(&self.current_selected_tts_line)
                     {
                         if let Some(query) = &ai.query {
-                            crate::bottom_pane::create_bottom_pane(
+                            if let Some(cmd) = crate::bottom_pane::create_bottom_pane(
                                 &mut self.current_displaying,
                                 &mut self.playing,
                                 ui,
+                                &self.current_selected_tts_line,
                                 &query.accent_phrases,
-                            );
+                            ) {
+                                invocations.push(Box::new(cmd));
+                            }
                         }
                     }
                 });
