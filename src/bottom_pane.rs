@@ -618,7 +618,7 @@ impl<'a> TwoNotchSlider<'a> {
 }
 impl<'a> Widget for TwoNotchSlider<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
-        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
+        ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
             ui.label(&self.text);
             {
                 self.slider_ui(ui)
