@@ -1,7 +1,7 @@
 use crate::api_schema::AccentPhrase;
 use crate::history::Command;
 use crate::project::VoiceVoxProject;
-use eframe::egui::{FontId, Response, SelectableLabel, Ui, Vec2, Widget};
+use eframe::egui::{Align, FontId, Layout, Response, SelectableLabel, Ui, Vec2, Widget};
 use std::ops::RangeInclusive;
 
 /// アクセント位置とアクセント句の変化で新しくリクエストを送る必要がある.
@@ -101,183 +101,195 @@ pub fn create_bottom_pane(
         });
 
         ui.separator();
-        let scroll = eframe::egui::containers::ScrollArea::both();
+        let alloc_height = ui.available_height() * 1.2;
+
+        let scroll = eframe::egui::containers::ScrollArea::horizontal()
+            .max_height(alloc_height)
+            .auto_shrink([false, false]);
         scroll.show(ui, |ui| {
-            match current_displaying {
-                Displaying::Accent => {
-                    let mut space = ui.spacing().item_spacing;
-                    space.y = ui.available_height();
-                    space.x *= 2.0;
-                    let accent_phrase_len = edit_targets.len();
-                    if !edit_targets.is_empty() {
-                        ui.horizontal(|ui| {
-                            for (ap, edit_target) in edit_targets.iter().enumerate() {
-                                let mut accent = edit_target.accent;
-                                let mora_len = edit_target.moras.len();
-                                let width = mora_len as f32 * space.x;
+            ui.set_height(alloc_height / 1.2);
+            ui.vertical(|ui| {
+                match current_displaying {
+                    Displaying::Accent => {
+                        let mut space = ui.spacing().item_spacing;
+                        space.y = ui.available_height() / 1.2;
+                        space.x *= 2.0;
+                        let accent_phrase_len = edit_targets.len();
+                        if !edit_targets.is_empty() {
+                            ui.horizontal(|ui| {
+                                for (ap, edit_target) in edit_targets.iter().enumerate() {
+                                    let mut accent = edit_target.accent;
+                                    let mora_len = edit_target.moras.len();
+                                    let width = mora_len as f32 * space.x;
 
-                                ui.vertical(|ui| {
-                                    let slider =
-                                        eframe::egui::Slider::new(&mut accent, 1..=mora_len as i32)
-                                            .integer()
-                                            .show_value(false);
-                                    let res = ui.add_sized(vec2(width, 16.0), slider);
-                                    if (res.clicked() | res.drag_released())
-                                        & (accent != edit_target.accent)
-                                    {
-                                        //emit signal.
-                                        rt = Some(BottomPaneCommand::AccentPhrase {
-                                            uuid: uuid.to_owned(),
-                                            accent_phrase: ap,
-                                            new_accent: accent as usize,
-                                            prev_accent: edit_target.accent as usize,
-                                        });
-                                    }
-                                });
-
-                                if ap < accent_phrase_len - 1 {
-                                    let button = eframe::egui::Button::new("");
-                                    if ui.add_sized(space, button).clicked() {
-                                        rt = Some(BottomPaneCommand::Concat {
-                                            uuid: uuid.to_owned(),
-                                            accent_phrase: ap,
-                                            length: mora_len,
-                                        });
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-                Displaying::Intonation => {
-                    let mut space = ui.spacing().item_spacing;
-                    space.y = ui.available_height();
-                    space.x *= 2.0;
-                    let accent_phrase_len = edit_targets.len();
-                    if !edit_targets.is_empty() {
-                        ui.horizontal(|ui| {
-                            for (ap, edit_target) in edit_targets.iter().enumerate() {
-                                let mora_len = edit_target.moras.len();
-                                for (index, mora) in edit_target.moras.iter().enumerate() {
-                                    let mut pitch = mora.pitch;
-                                    let slider = eframe::egui::Slider::new(&mut pitch, 3.0..=6.5)
-                                        .vertical()
-                                        .text(&mora.text)
+                                    ui.vertical(|ui| {
+                                        let slider = eframe::egui::Slider::new(
+                                            &mut accent,
+                                            1..=mora_len as i32,
+                                        )
+                                        .integer()
                                         .show_value(false);
-                                    let res = ui.add(slider);
-
-                                    if (res.clicked() | res.drag_released())
-                                        & ((pitch - mora.pitch).abs() > f32::EPSILON)
-                                    {
-                                        //emit signal.
-                                        rt = Some(BottomPaneCommand::Pitch {
-                                            uuid: uuid.to_owned(),
-                                            accent_phrase: ap,
-                                            mora: index,
-                                            pitch_diff: pitch - mora.pitch,
-                                        });
-                                    }
-                                }
-                                if ap < accent_phrase_len - 1 {
-                                    let button = eframe::egui::Button::new("");
-                                    if ui.add_sized(space, button).clicked() {
-                                        rt = Some(BottomPaneCommand::Concat {
-                                            uuid: uuid.to_owned(),
-                                            accent_phrase: ap,
-                                            length: mora_len,
-                                        });
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-                Displaying::Length => {
-                    let mut space = ui.spacing().item_spacing;
-                    space.y = ui.available_height();
-                    space.x *= 2.0;
-                    let accent_phrase_len = edit_targets.len();
-                    if !edit_targets.is_empty() {
-                        ui.horizontal(|ui| {
-                            for (ap, edit_target) in edit_targets.iter().enumerate() {
-                                let mora_len = edit_target.moras.len();
-                                for (index, mora) in edit_target.moras.iter().enumerate() {
-                                    if let Some(prev_consonant) = mora.consonant_length {
-                                        let mut consonant = prev_consonant;
-                                        let mut vowel = mora.vowel_length;
-                                        let slider = TwoNotchSlider {
-                                            a: &mut consonant,
-                                            b: &mut vowel,
-                                            range: 0.0..=0.30,
-                                            text: mora.text.clone(),
-                                        };
-                                        let res = ui.add(slider);
-
-                                        let vowel_diff = if (res.clicked() | res.drag_released())
-                                            & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                        let res = ui.add_sized(vec2(width, 16.0), slider);
+                                        if (res.clicked() | res.drag_released())
+                                            & (accent != edit_target.accent)
                                         {
-                                            log::debug!("vowel {}", vowel);
-                                            Some(vowel - mora.vowel_length)
-                                        } else {
-                                            None
-                                        };
-                                        let consonant_diff = if (res.clicked()
-                                            | res.drag_released())
-                                            & ((consonant - prev_consonant).abs() > f32::EPSILON)
-                                        {
-                                            log::debug!("consonant {}", consonant);
-                                            Some(consonant - prev_consonant)
-                                        } else {
-                                            None
-                                        };
-                                        if res.clicked() | res.drag_released() {
                                             //emit signal.
-                                            rt = Some(BottomPaneCommand::VowelAndConsonant {
+                                            rt = Some(BottomPaneCommand::AccentPhrase {
                                                 uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
-                                                mora: index,
-                                                vowel_diff,
-                                                consonant_diff,
+                                                new_accent: accent as usize,
+                                                prev_accent: edit_target.accent as usize,
                                             });
                                         }
-                                    } else {
-                                        let mut vowel = mora.vowel_length;
+                                    });
+
+                                    if ap < accent_phrase_len - 1 {
+                                        let button = eframe::egui::Button::new("");
+                                        if ui.add_sized(space, button).clicked() {
+                                            rt = Some(BottomPaneCommand::Concat {
+                                                uuid: uuid.to_owned(),
+                                                accent_phrase: ap,
+                                                length: mora_len,
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
+                    }
+                    Displaying::Intonation => {
+                        let mut space = ui.spacing().item_spacing;
+                        space.y = ui.available_height() / 1.2;
+                        space.x *= 2.0;
+                        let accent_phrase_len = edit_targets.len();
+                        if !edit_targets.is_empty() {
+                            ui.horizontal(|ui| {
+                                for (ap, edit_target) in edit_targets.iter().enumerate() {
+                                    let mora_len = edit_target.moras.len();
+                                    for (index, mora) in edit_target.moras.iter().enumerate() {
+                                        let mut pitch = mora.pitch;
                                         let slider =
-                                            eframe::egui::Slider::new(&mut vowel, 0.0..=0.30)
+                                            eframe::egui::Slider::new(&mut pitch, 3.0..=6.5)
                                                 .vertical()
                                                 .text(&mora.text)
                                                 .show_value(false);
                                         let res = ui.add(slider);
 
                                         if (res.clicked() | res.drag_released())
-                                            & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                            & ((pitch - mora.pitch).abs() > f32::EPSILON)
                                         {
                                             //emit signal.
-                                            rt = Some(BottomPaneCommand::VowelAndConsonant {
+                                            rt = Some(BottomPaneCommand::Pitch {
                                                 uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 mora: index,
-                                                vowel_diff: Some(vowel - mora.vowel_length),
-                                                consonant_diff: None,
+                                                pitch_diff: pitch - mora.pitch,
                                             });
                                         }
-                                    };
-                                }
-                                if ap < accent_phrase_len - 1 {
-                                    let button = eframe::egui::Button::new("");
-                                    if ui.add_sized(space, button).clicked() {
-                                        rt = Some(BottomPaneCommand::Concat {
-                                            uuid: uuid.to_owned(),
-                                            accent_phrase: ap,
-                                            length: mora_len,
-                                        });
+                                    }
+                                    if ap < accent_phrase_len - 1 {
+                                        let button = eframe::egui::Button::new("");
+                                        if ui.add_sized(space, button).clicked() {
+                                            rt = Some(BottomPaneCommand::Concat {
+                                                uuid: uuid.to_owned(),
+                                                accent_phrase: ap,
+                                                length: mora_len,
+                                            });
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            });
+                        }
+                    }
+                    Displaying::Length => {
+                        let mut space = ui.spacing().item_spacing;
+                        space.y = ui.available_height() / 1.2;
+                        space.x *= 2.0;
+                        let accent_phrase_len = edit_targets.len();
+                        if !edit_targets.is_empty() {
+                            ui.horizontal(|ui| {
+                                for (ap, edit_target) in edit_targets.iter().enumerate() {
+                                    let mora_len = edit_target.moras.len();
+                                    for (index, mora) in edit_target.moras.iter().enumerate() {
+                                        if let Some(prev_consonant) = mora.consonant_length {
+                                            let mut consonant = prev_consonant;
+                                            let mut vowel = mora.vowel_length;
+                                            let slider = TwoNotchSlider {
+                                                a: &mut consonant,
+                                                b: &mut vowel,
+                                                range: 0.0..=0.30,
+                                                text: mora.text.clone(),
+                                            };
+                                            let res = ui.add(slider);
+
+                                            let vowel_diff = if (res.clicked()
+                                                | res.drag_released())
+                                                & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                            {
+                                                log::debug!("vowel {}", vowel);
+                                                Some(vowel - mora.vowel_length)
+                                            } else {
+                                                None
+                                            };
+                                            let consonant_diff = if (res.clicked()
+                                                | res.drag_released())
+                                                & ((consonant - prev_consonant).abs()
+                                                    > f32::EPSILON)
+                                            {
+                                                log::debug!("consonant {}", consonant);
+                                                Some(consonant - prev_consonant)
+                                            } else {
+                                                None
+                                            };
+                                            if res.clicked() | res.drag_released() {
+                                                //emit signal.
+                                                rt = Some(BottomPaneCommand::VowelAndConsonant {
+                                                    uuid: uuid.to_owned(),
+                                                    accent_phrase: ap,
+                                                    mora: index,
+                                                    vowel_diff,
+                                                    consonant_diff,
+                                                });
+                                            }
+                                        } else {
+                                            let mut vowel = mora.vowel_length;
+                                            let slider =
+                                                eframe::egui::Slider::new(&mut vowel, 0.0..=0.30)
+                                                    .vertical()
+                                                    .text(&mora.text)
+                                                    .show_value(false);
+                                            let res = ui.add(slider);
+
+                                            if (res.clicked() | res.drag_released())
+                                                & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                            {
+                                                //emit signal.
+                                                rt = Some(BottomPaneCommand::VowelAndConsonant {
+                                                    uuid: uuid.to_owned(),
+                                                    accent_phrase: ap,
+                                                    mora: index,
+                                                    vowel_diff: Some(vowel - mora.vowel_length),
+                                                    consonant_diff: None,
+                                                });
+                                            }
+                                        };
+                                    }
+                                    if ap < accent_phrase_len - 1 {
+                                        let button = eframe::egui::Button::new("");
+                                        if ui.add_sized(space, button).clicked() {
+                                            rt = Some(BottomPaneCommand::Concat {
+                                                uuid: uuid.to_owned(),
+                                                accent_phrase: ap,
+                                                length: mora_len,
+                                            });
+                                        }
+                                    }
+                                }
+                            });
+                        }
                     }
                 }
-            }
+            });
         });
     });
     rt
@@ -522,17 +534,16 @@ pub struct TwoNotchSlider<'a> {
     pub text: String,
 }
 
-impl<'a> Widget for TwoNotchSlider<'a> {
-    fn ui(self, ui: &mut Ui) -> Response {
+impl<'a> TwoNotchSlider<'a> {
+    fn slider_ui(self, ui: &mut Ui) -> Response {
         use eframe::egui;
         use egui::epaint::{pos2, vec2, Color32, Rect, Rounding, Stroke};
         use egui::Sense;
-        //left half size.
         let size_of_notch = vec2(8.0, 16.0);
 
-        let height = ui.available_height() - (size_of_notch.y * 2.0);
+        let height = ui.available_height();
 
-        let (id, rect) = ui.allocate_space(vec2(size_of_notch.x * 2.0, ui.available_height()));
+        let (_id, rect) = ui.allocate_space(vec2(size_of_notch.x * 2.0, ui.available_height()));
         let origin = rect.min;
 
         let res_left = ui.allocate_rect(
@@ -549,7 +560,7 @@ impl<'a> Widget for TwoNotchSlider<'a> {
 
         let bottom = origin.y + height;
 
-        let width_of_range = (*self.range.end() - *self.range.start());
+        let width_of_range = *self.range.end() - *self.range.start();
 
         let a = if let Some(pos) = res_left.interact_pointer_pos() {
             let cursor_pos = pos.y;
@@ -603,5 +614,16 @@ impl<'a> Widget for TwoNotchSlider<'a> {
         *self.a = f32::clamp(a, *self.range.start(), *self.range.end());
         *self.b = f32::clamp(b, *self.range.start(), *self.range.end());
         res_left.union(res_right)
+    }
+}
+impl<'a> Widget for TwoNotchSlider<'a> {
+    fn ui(self, ui: &mut Ui) -> Response {
+        ui.with_layout(Layout::bottom_up(Align::Center), |ui| {
+            ui.label(&self.text);
+            {
+                self.slider_ui(ui)
+            }
+        })
+        .inner
     }
 }
