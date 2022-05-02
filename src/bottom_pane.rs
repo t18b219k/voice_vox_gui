@@ -209,7 +209,7 @@ pub fn create_bottom_pane(
                                             line_points.push(pos2(left + x + radius, graph_pos));
                                         }
                                         use eframe::egui::epaint;
-                                        use epaint::{PathShape, Shape};
+                                        use epaint::Shape;
                                         let shape = Shape::line(
                                             line_points,
                                             Stroke::new(2.0, Color32::BLACK),
@@ -606,7 +606,7 @@ pub struct TwoNotchSlider<'a> {
 impl<'a> TwoNotchSlider<'a> {
     fn slider_ui(self, ui: &mut Ui) -> Response {
         use eframe::egui;
-        use egui::epaint::{pos2, vec2, Color32, Rect, Rounding, Stroke};
+        use egui::epaint::{pos2, vec2, Color32, Rect, Stroke};
         use egui::Sense;
         let width_of_rail = 8.0;
 
@@ -656,12 +656,12 @@ impl<'a> TwoNotchSlider<'a> {
             let unit_angle = std::f32::consts::TAU / 24.0;
 
             let right = (0..=12).into_iter().map(|x| {
-                let phase = (x as f32 * unit_angle + offset);
+                let phase = x as f32 * unit_angle + offset;
                 let (sin, cos) = phase.sin_cos();
                 pos2(cos * radius, sin * radius)
             });
             let left = (12..=24).into_iter().map(|x| {
-                let phase = (x as f32 * unit_angle + offset);
+                let phase = x as f32 * unit_angle + offset;
                 let (sin, cos) = phase.sin_cos();
                 pos2(cos * radius, sin * radius)
             });
@@ -680,8 +680,8 @@ impl<'a> TwoNotchSlider<'a> {
 
         let mut left = left.clone();
         left.translate(center.to_vec2());
-        if res_left.hovered(){
-            painter.circle_filled(center,radius*1.4,Color32::LIGHT_GREEN);
+        if res_left.hovered() {
+            painter.circle_filled(center, radius * 1.4, Color32::LIGHT_GREEN);
         }
         painter.add(left);
 
@@ -706,8 +706,8 @@ impl<'a> TwoNotchSlider<'a> {
         let b_points_from_bottom = (b_diff_from_start / width_of_range) * height;
         let center = pos2(origin.x + width_of_rail, bottom - b_points_from_bottom);
         right.translate(center.to_vec2());
-        if res_right.hovered(){
-            painter.circle_filled(center,radius*1.4,Color32::LIGHT_GREEN);
+        if res_right.hovered() {
+            painter.circle_filled(center, radius * 1.4, Color32::LIGHT_GREEN);
         }
         painter.add(right);
         *self.a = f32::clamp(a, *self.range.start(), *self.range.end());
