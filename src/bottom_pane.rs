@@ -608,23 +608,23 @@ impl<'a> TwoNotchSlider<'a> {
         use eframe::egui;
         use egui::epaint::{pos2, vec2, Color32, Rect, Rounding, Stroke};
         use egui::Sense;
-        let size_of_notch = vec2(8.0, 16.0);
+        let width_of_rail = 8.0;
 
         let height = ui.available_height();
 
-        let (_id, rect) = ui.allocate_space(vec2(size_of_notch.x * 2.0, ui.available_height()));
+        let (_id, rect) = ui.allocate_space(vec2(width_of_rail * 2.0, ui.available_height()));
         let origin = rect.min;
 
         let res_left = ui.allocate_rect(
-            Rect::from_min_max(origin, origin + vec2(size_of_notch.x, height)),
+            Rect::from_min_max(origin, origin + vec2(width_of_rail, height)),
             Sense::click_and_drag(),
         );
 
         let painter = ui.painter_at(rect);
         painter.vline(
-            origin.x + (size_of_notch.x),
+            origin.x + width_of_rail,
             origin.y..=origin.y + height,
-            Stroke::new(size_of_notch.x, Color32::LIGHT_GRAY),
+            Stroke::new(width_of_rail, Color32::LIGHT_GRAY),
         );
 
         let bottom = origin.y + height;
@@ -642,22 +642,57 @@ impl<'a> TwoNotchSlider<'a> {
 
         let a_diff_from_start = a - *self.range.start();
         let a_points_from_bottom = (a_diff_from_start / width_of_range) * height;
-        let center = pos2(
-            origin.x + size_of_notch.x * 0.5,
-            bottom - a_points_from_bottom,
-        );
-        painter.rect(
-            Rect::from_center_size(center, size_of_notch),
-            Rounding::none(),
-            Color32::BLUE,
-            Stroke::none(),
-        );
+        let center = pos2(origin.x + width_of_rail, bottom - a_points_from_bottom);
 
-        let right_origin = origin + vec2(size_of_notch.x, 0.0);
+        let thickness = ui
+            .text_style_height(&TextStyle::Body)
+            .at_least(ui.spacing().interact_size.y);
+        let radius = thickness / 2.5;
+
+        let (left, right) = HALF_CIRCLE.get_or_init(|| {
+            use eframe::epaint::Shape;
+            // - pi/2 -> pi/2
+            let offset = -std::f32::consts::FRAC_PI_2;
+            let unit_angle = std::f32::consts::TAU / 24.0;
+
+            let right = (0..=12).into_iter().map(|x| {
+                let phase = (x as f32 * unit_angle + offset);
+                let (sin, cos) = phase.sin_cos();
+                pos2(cos * radius, sin * radius)
+            });
+            let left = (12..=24).into_iter().map(|x| {
+                let phase = (x as f32 * unit_angle + offset);
+                let (sin, cos) = phase.sin_cos();
+                pos2(cos * radius, sin * radius)
+            });
+            let right = Shape::convex_polygon(
+                right.collect(),
+                Color32::LIGHT_GRAY,
+                Stroke::new(1.0, Color32::BLACK),
+            );
+            let left = Shape::convex_polygon(
+                left.collect(),
+                Color32::LIGHT_GRAY,
+                Stroke::new(1.0, Color32::BLACK),
+            );
+            (left, right)
+        });
+
+        let mut left = left.clone();
+        left.translate(center.to_vec2());
+        if res_left.hovered(){
+            painter.circle_filled(center,radius*1.4,Color32::LIGHT_GREEN);
+        }
+        painter.add(left);
+
+        let mut right = right.clone();
+
+        let right_origin = origin + vec2(width_of_rail, 0.0);
         let res_right = ui.allocate_rect(
-            Rect::from_min_max(right_origin, right_origin + vec2(size_of_notch.x, height)),
+            Rect::from_min_max(right_origin, right_origin + vec2(width_of_rail, height)),
             Sense::click_and_drag(),
         );
+
         let b = if let Some(pos) = res_right.interact_pointer_pos() {
             let cursor_pos = pos.y;
             let x = bottom - cursor_pos;
@@ -669,22 +704,21 @@ impl<'a> TwoNotchSlider<'a> {
 
         let b_diff_from_start = b - *self.range.start();
         let b_points_from_bottom = (b_diff_from_start / width_of_range) * height;
-        let center = pos2(
-            right_origin.x + size_of_notch.x * 0.5,
-            bottom - b_points_from_bottom,
-        );
-        painter.rect(
-            Rect::from_center_size(center, size_of_notch),
-            Rounding::none(),
-            Color32::BLUE,
-            Stroke::none(),
-        );
-
+        let center = pos2(origin.x + width_of_rail, bottom - b_points_from_bottom);
+        right.translate(center.to_vec2());
+        if res_right.hovered(){
+            painter.circle_filled(center,radius*1.4,Color32::LIGHT_GREEN);
+        }
+        painter.add(right);
         *self.a = f32::clamp(a, *self.range.start(), *self.range.end());
         *self.b = f32::clamp(b, *self.range.start(), *self.range.end());
         res_left.union(res_right)
     }
 }
+
+static HALF_CIRCLE: once_cell::sync::OnceCell<(eframe::epaint::Shape, eframe::epaint::Shape)> =
+    once_cell::sync::OnceCell::new();
+
 impl<'a> Widget for TwoNotchSlider<'a> {
     fn ui(self, ui: &mut Ui) -> Response {
         ui.with_layout(Layout::bottom_up(Align::Min), |ui| {
