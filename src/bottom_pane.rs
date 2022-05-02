@@ -1,7 +1,9 @@
 use crate::api_schema::AccentPhrase;
 use crate::history::Command;
 use crate::project::VoiceVoxProject;
-use eframe::egui::{Align, FontId, Layout, Response, SelectableLabel, Ui, Vec2, Widget};
+use eframe::egui::{
+    Align, Align2, FontId, Layout, NumExt, Response, SelectableLabel, TextStyle, Ui, Vec2, Widget,
+};
 use std::ops::RangeInclusive;
 
 /// アクセント位置とアクセント句の変化で新しくリクエストを送る必要がある.
@@ -109,11 +111,11 @@ pub fn create_bottom_pane(
         scroll.show(ui, |ui| {
             ui.set_height(alloc_height / 1.2);
             ui.vertical(|ui| {
+                let mut space = ui.spacing().item_spacing;
+                space.y = ui.available_height() / 1.2;
+                space.x *= 6.0;
                 match current_displaying {
                     Displaying::Accent => {
-                        let mut space = ui.spacing().item_spacing;
-                        space.y = ui.available_height() / 1.2;
-                        space.x *= 2.0;
                         let accent_phrase_len = edit_targets.len();
                         if !edit_targets.is_empty() {
                             ui.horizontal(|ui| {
@@ -121,7 +123,7 @@ pub fn create_bottom_pane(
                                     let mut accent = edit_target.accent;
                                     let mora_len = edit_target.moras.len();
                                     let width = mora_len as f32 * space.x;
-
+                                    ui.set_height(space.y);
                                     ui.vertical(|ui| {
                                         let slider = eframe::egui::Slider::new(
                                             &mut accent,
@@ -129,7 +131,12 @@ pub fn create_bottom_pane(
                                         )
                                         .integer()
                                         .show_value(false);
-                                        let res = ui.add_sized(vec2(width, 16.0), slider);
+                                        ui.style_mut().spacing.slider_width = width;
+                                        let thickness = ui
+                                            .text_style_height(&TextStyle::Body)
+                                            .at_least(ui.spacing().interact_size.y);
+                                        let radius = thickness / 2.5;
+                                        let res = ui.add(slider);
                                         if (res.clicked() | res.drag_released())
                                             & (accent != edit_target.accent)
                                         {
@@ -141,6 +148,74 @@ pub fn create_bottom_pane(
                                                 prev_accent: edit_target.accent as usize,
                                             });
                                         }
+                                        let h = ui.available_height();
+                                        let w = res.rect.width();
+                                        let (r, painter) = ui.allocate_painter(
+                                            vec2(w, h),
+                                            Sense::focusable_noninteractive(),
+                                        );
+                                        let rect = r.rect;
+
+                                        let left = rect.left();
+                                        let top = rect.top();
+                                        let bottom = rect.bottom();
+
+                                        let text_height = thickness;
+                                        //
+                                        let mut graph_pos = bottom - text_height;
+
+                                        use eframe::egui::pos2;
+                                        let mut line_points = vec![];
+                                        let width_per_mora = (w - radius * 2.0)
+                                            / ((edit_target.moras.len() - 1) as f32);
+                                        for (idx, mora) in edit_target.moras.iter().enumerate() {
+                                            let x = width_per_mora * idx as f32;
+                                            if (idx + 1) == edit_target.accent as usize {
+                                                painter.vline(
+                                                    left + x + radius,
+                                                    top..=bottom - text_height,
+                                                    Stroke::new(2.0, Color32::LIGHT_GREEN),
+                                                );
+                                            } else {
+                                                let dash_len = height / 10.0;
+                                                painter.add(Shape::dashed_line(
+                                                    &[
+                                                        pos2(left + x + radius, top),
+                                                        pos2(
+                                                            left + x + radius,
+                                                            bottom - text_height,
+                                                        ),
+                                                    ],
+                                                    Stroke::new(1.0, Color32::LIGHT_GREEN),
+                                                    dash_len,
+                                                    dash_len,
+                                                ));
+                                            };
+
+                                            painter.text(
+                                                pos2(left + x, bottom - text_height),
+                                                Align2::LEFT_TOP,
+                                                &mora.text,
+                                                FontId::default(),
+                                                Color32::BLACK,
+                                            );
+                                            if idx + 1 == accent as usize {
+                                                graph_pos = top;
+                                            } else if idx + 1 > accent as usize {
+                                                graph_pos = bottom - text_height;
+                                            } else if (idx + 1 < accent as usize) & (idx + 1 != 1) {
+                                                graph_pos = top;
+                                            }
+                                            line_points.push(pos2(left + x + radius, graph_pos));
+                                        }
+                                        use eframe::egui::epaint;
+                                        use epaint::{PathShape, Shape};
+                                        let shape = Shape::line(
+                                            line_points,
+                                            Stroke::new(2.0, Color32::BLACK),
+                                        );
+
+                                        painter.add(shape);
                                     });
 
                                     if ap < accent_phrase_len - 1 {
@@ -158,9 +233,6 @@ pub fn create_bottom_pane(
                         }
                     }
                     Displaying::Intonation => {
-                        let mut space = ui.spacing().item_spacing;
-                        space.y = ui.available_height() / 1.2;
-                        space.x *= 2.0;
                         let accent_phrase_len = edit_targets.len();
                         if !edit_targets.is_empty() {
                             ui.horizontal(|ui| {
@@ -202,9 +274,6 @@ pub fn create_bottom_pane(
                         }
                     }
                     Displaying::Length => {
-                        let mut space = ui.spacing().item_spacing;
-                        space.y = ui.available_height() / 1.2;
-                        space.x *= 2.0;
                         let accent_phrase_len = edit_targets.len();
                         if !edit_targets.is_empty() {
                             ui.horizontal(|ui| {
