@@ -8,8 +8,8 @@ description = "voicevox gui implementation in Rust"
 [dependencies]
 async-trait="0.1"
 base64 = "0.13"
-eframe = { version = "0.17.0", git = "https://github.com/t18b219k/egui.git", branch = "master" }
-egui_extras ={ version = "0.17.0", git = "https://github.com/t18b219k/egui.git", branch = "master", features = ["image"] }
+eframe = { version = "0.18.0", git = "https://github.com/t18b219k/egui.git", branch = "master" }
+egui_extras ={ version = "0.18.0", git = "https://github.com/t18b219k/egui.git", branch = "master", features = ["image"] }
 form_urlencoded = "1"
 image = { version = "0.24", features = ["png"] }
 log = "0.4"

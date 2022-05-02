@@ -1,6 +1,5 @@
 use eframe::egui::{Color32, Context, FontFamily, Layout, Stroke};
-use eframe::epi::Frame;
-use eframe::{CreationContext, NativeOptions};
+use eframe::{CreationContext, Frame, NativeOptions};
 
 use crate::api::Api;
 
