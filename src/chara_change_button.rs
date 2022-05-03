@@ -84,7 +84,7 @@ async fn test_init_icon_store() {
 pub struct CharaChangeButton(pub i32);
 
 impl CharaChangeButton {
-    pub fn ui(self, line: &String, ui: &mut Ui, ctx: &Context) -> Option<CharaChangeCommand> {
+    pub fn ui(self, ui: &mut Ui, ctx: &Context) -> Option<CharaChangeCommand> {
         let mut rt = None;
         let image = ICON_AND_PORTRAIT_STORE.get()?;
         let style_structure = STYLE_STRUCTURE.get()?;
@@ -125,7 +125,6 @@ impl CharaChangeButton {
                                                     );
                                                     if ui.add(style_button).clicked() {
                                                         rt = Some(CharaChangeCommand {
-                                                            line: line.clone(),
                                                             prev_chara: self.0,
                                                             new_chara: *speaker,
                                                         });
@@ -138,7 +137,6 @@ impl CharaChangeButton {
                                     .clicked()
                                 {
                                     rt = Some(CharaChangeCommand {
-                                        line: line.clone(),
                                         prev_chara: self.0,
                                         new_chara: *speaker,
                                     });
@@ -146,7 +144,6 @@ impl CharaChangeButton {
                             } else {
                                 if ui.add(default_style_button).clicked() {
                                     rt = Some(CharaChangeCommand {
-                                        line: line.clone(),
                                         prev_chara: self.0,
                                         new_chara: *speaker,
                                     });
@@ -168,20 +165,19 @@ impl CharaChangeButton {
 }
 
 pub struct CharaChangeCommand {
-    line: String,
     pub prev_chara: i32,
     pub new_chara: i32,
 }
 
 impl Command for CharaChangeCommand {
-    fn invoke(&mut self, project: &mut VoiceVoxProject) {
-        if let Some(audio_item) = project.audioItems.get_mut(&self.line) {
+    fn invoke(&mut self, project: &mut VoiceVoxProject, uuid: &str) {
+        if let Some(audio_item) = project.audioItems.get_mut(uuid) {
             audio_item.styleId = self.new_chara;
         }
     }
 
-    fn undo(&mut self, project: &mut VoiceVoxProject) {
-        if let Some(audio_item) = project.audioItems.get_mut(&self.line) {
+    fn undo(&mut self, project: &mut VoiceVoxProject, uuid: &str) {
+        if let Some(audio_item) = project.audioItems.get_mut(uuid) {
             audio_item.styleId = self.prev_chara;
         }
     }

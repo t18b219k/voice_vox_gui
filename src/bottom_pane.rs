@@ -1,4 +1,5 @@
 use crate::api_schema::AccentPhrase;
+use crate::commands::BottomPaneCommand;
 use crate::history::Command;
 use crate::project::VoiceVoxProject;
 use eframe::egui::{
@@ -16,9 +17,8 @@ pub enum Displaying {
 
 pub fn create_bottom_pane(
     current_displaying: &mut Displaying,
-    playing: &mut bool,
+    should_play: &mut Option<bool>,
     ui: &mut Ui,
-    uuid: &str,
     edit_targets: &[AccentPhrase],
 ) -> Option<BottomPaneCommand> {
     let mut rt = None;
@@ -72,11 +72,11 @@ pub fn create_bottom_pane(
                 let box_rect = response.rect.shrink(radius * (3.0 / 4.0));
                 painter.circle_filled(center, radius, Color32::DARK_GREEN);
 
-                if *playing {
+                if false {
                     let rounding = Rounding::none();
                     painter.rect(box_rect, rounding, Color32::BLACK, Stroke::none());
                     if response.clicked() {
-                        *playing = false;
+                        should_play.replace(false);
                     }
                 } else {
                     use eframe::egui::epaint::PathShape;
@@ -95,7 +95,7 @@ pub fn create_bottom_pane(
                     let shape = Shape::Path(points);
                     painter.add(shape);
                     if response.clicked() {
-                        *playing = true;
+                        should_play.replace(true);
                     }
                 }
             })
@@ -142,7 +142,6 @@ pub fn create_bottom_pane(
                                         {
                                             //emit signal.
                                             rt = Some(BottomPaneCommand::AccentPhrase {
-                                                uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 new_accent: accent as usize,
                                                 prev_accent: edit_target.accent as usize,
@@ -222,7 +221,6 @@ pub fn create_bottom_pane(
                                         let button = eframe::egui::Button::new("");
                                         if ui.add_sized(space, button).clicked() {
                                             rt = Some(BottomPaneCommand::Concat {
-                                                uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 length: mora_len,
                                             });
@@ -252,7 +250,6 @@ pub fn create_bottom_pane(
                                         {
                                             //emit signal.
                                             rt = Some(BottomPaneCommand::Pitch {
-                                                uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 mora: index,
                                                 pitch_diff: pitch - mora.pitch,
@@ -263,7 +260,6 @@ pub fn create_bottom_pane(
                                         let button = eframe::egui::Button::new("");
                                         if ui.add_sized(space, button).clicked() {
                                             rt = Some(BottomPaneCommand::Concat {
-                                                uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 length: mora_len,
                                             });
@@ -313,7 +309,6 @@ pub fn create_bottom_pane(
                                             if res.clicked() | res.drag_released() {
                                                 //emit signal.
                                                 rt = Some(BottomPaneCommand::VowelAndConsonant {
-                                                    uuid: uuid.to_owned(),
                                                     accent_phrase: ap,
                                                     mora: index,
                                                     vowel_diff,
@@ -334,7 +329,6 @@ pub fn create_bottom_pane(
                                             {
                                                 //emit signal.
                                                 rt = Some(BottomPaneCommand::VowelAndConsonant {
-                                                    uuid: uuid.to_owned(),
                                                     accent_phrase: ap,
                                                     mora: index,
                                                     vowel_diff: Some(vowel - mora.vowel_length),
@@ -347,7 +341,6 @@ pub fn create_bottom_pane(
                                         let button = eframe::egui::Button::new("");
                                         if ui.add_sized(space, button).clicked() {
                                             rt = Some(BottomPaneCommand::Concat {
-                                                uuid: uuid.to_owned(),
                                                 accent_phrase: ap,
                                                 length: mora_len,
                                             });
@@ -362,238 +355,6 @@ pub fn create_bottom_pane(
         });
     });
     rt
-}
-
-pub enum BottomPaneCommand {
-    ///
-    /// [[ニ],[ホ],[ン]]*[[シ],[マ],[グ],[ニ]]
-    ///  ->
-    /// ```
-    ///  Concat{
-    ///     accent_phrase:0,
-    ///     length:3,
-    ///    }
-    /// ```
-    ///
-    Concat {
-        uuid: String,
-        accent_phrase: usize,
-        length: usize,
-    },
-    ///
-    ///
-    ///  [ [ニ] [ホ] * [ン] ],[[シ] [マ] [グ] [ニ]]
-    ///
-    /// ->```
-    /// Split{accent_phrase:0,mora:2}
-    /// ```
-    Split {
-        uuid: String,
-        accent_phrase: usize,
-        mora: usize,
-    },
-
-    AccentPhrase {
-        uuid: String,
-        accent_phrase: usize,
-        new_accent: usize,
-        prev_accent: usize,
-    },
-    Pitch {
-        uuid: String,
-        accent_phrase: usize,
-        mora: usize,
-        pitch_diff: f32,
-    },
-    VowelAndConsonant {
-        uuid: String,
-        accent_phrase: usize,
-        mora: usize,
-        vowel_diff: Option<f32>,
-        consonant_diff: Option<f32>,
-    },
-}
-
-impl Command for BottomPaneCommand {
-    fn invoke(&mut self, project: &mut VoiceVoxProject) {
-        match self {
-            BottomPaneCommand::Concat {
-                uuid,
-                accent_phrase: index,
-                length: _,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        assert!(*index + 1 < aq.accent_phrases.len());
-                        let right_moras = aq.accent_phrases[*index + 1].moras.clone();
-                        aq.accent_phrases[*index]
-                            .moras
-                            .extend_from_slice(&right_moras);
-                        aq.accent_phrases.remove(*index + 1);
-                    }
-                }
-            }
-            BottomPaneCommand::Split {
-                uuid,
-                accent_phrase: index,
-                mora,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        assert!(*index < aq.accent_phrases.len());
-                        let insert = crate::api_schema::AccentPhrase {
-                            moras: aq.accent_phrases[*index].moras.split_off(*mora),
-                            accent: 0,
-                            pause_mora: None,
-                            is_interrogative: None,
-                        };
-                        aq.accent_phrases.insert(*index + 1, insert);
-                    }
-                }
-            }
-            BottomPaneCommand::AccentPhrase {
-                uuid,
-                accent_phrase,
-                new_accent,
-                prev_accent: _,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].accent = *new_accent as i32;
-                    }
-                }
-            }
-            BottomPaneCommand::Pitch {
-                uuid,
-                accent_phrase,
-                mora,
-                pitch_diff,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch += *pitch_diff;
-                    }
-                }
-            }
-            BottomPaneCommand::VowelAndConsonant {
-                uuid,
-                accent_phrase,
-                mora,
-                vowel_diff,
-                consonant_diff,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        if let Some(vd) = vowel_diff {
-                            aq.accent_phrases[*accent_phrase].moras[*mora].vowel_length += *vd;
-                        }
-                        if let Some(cd) = consonant_diff {
-                            if let Some(consonant) =
-                                &mut aq.accent_phrases[*accent_phrase].moras[*mora].consonant_length
-                            {
-                                *consonant += *cd;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn undo(&mut self, project: &mut VoiceVoxProject) {
-        match self {
-            BottomPaneCommand::Concat {
-                uuid,
-                accent_phrase: index,
-                length,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        assert!(*index < aq.accent_phrases.len());
-                        let insert = crate::api_schema::AccentPhrase {
-                            moras: aq.accent_phrases[*index].moras.split_off(*length),
-                            accent: 0,
-                            pause_mora: None,
-                            is_interrogative: None,
-                        };
-                        aq.accent_phrases.insert(*index + 1, insert);
-                    }
-                }
-            }
-            BottomPaneCommand::Split {
-                uuid,
-                accent_phrase: index,
-                mora: _,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        assert!(*index + 1 < aq.accent_phrases.len());
-                        let right_moras = aq.accent_phrases[*index + 1].moras.clone();
-                        aq.accent_phrases[*index]
-                            .moras
-                            .extend_from_slice(&right_moras);
-                        aq.accent_phrases.remove(*index + 1);
-                    }
-                }
-            }
-            BottomPaneCommand::AccentPhrase {
-                uuid,
-                accent_phrase,
-                new_accent: _,
-                prev_accent,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].accent = *prev_accent as i32;
-                    }
-                }
-            }
-            BottomPaneCommand::Pitch {
-                uuid,
-                accent_phrase,
-                mora,
-                pitch_diff,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch -= *pitch_diff;
-                    }
-                }
-            }
-            BottomPaneCommand::VowelAndConsonant {
-                uuid,
-                accent_phrase,
-                mora,
-                vowel_diff,
-                consonant_diff,
-            } => {
-                if let Some(ai) = project.audioItems.get_mut(uuid) {
-                    if let Some(aq) = &mut ai.query {
-                        if let Some(vd) = vowel_diff {
-                            aq.accent_phrases[*accent_phrase].moras[*mora].vowel_length -= *vd;
-                        }
-                        if let Some(cd) = consonant_diff {
-                            if let Some(consonant) =
-                                &mut aq.accent_phrases[*accent_phrase].moras[*mora].consonant_length
-                            {
-                                *consonant -= *cd;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    fn op_name(&self) -> &str {
-        match self {
-            BottomPaneCommand::Concat { .. } => "アクセントフレーズ連結",
-            BottomPaneCommand::Split { .. } => "アクセントフレーズ分割",
-            BottomPaneCommand::AccentPhrase { .. } => "アクセント位置変更",
-            BottomPaneCommand::Pitch { .. } => "ピッチ変更",
-            BottomPaneCommand::VowelAndConsonant { .. } => "母音子音長さ変更",
-        }
-    }
 }
 
 pub struct TwoNotchSlider<'a> {
