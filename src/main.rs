@@ -1,7 +1,7 @@
 use eframe::egui::{Color32, Context, FontFamily, Layout, Stroke};
 use eframe::{CreationContext, Frame, NativeOptions};
 
-use crate::api::{APIError, Api};
+use crate::api::Api;
 
 use crate::bottom_pane::Displaying;
 use crate::commands::AudioQueryCommands;
@@ -11,11 +11,10 @@ use crate::menu::TopMenuOp;
 use crate::project::VoiceVoxProject;
 use crate::tool_bar::ToolBarOp;
 use eframe::egui;
-use std::collections::{BTreeMap, HashMap};
-use std::io::{Cursor, Seek};
+use std::collections::HashMap;
+use std::io::Cursor;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::oneshot::Receiver;
-use tokio::time::Instant;
 
 mod api;
 mod api_schema;

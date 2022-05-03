@@ -1,7 +1,7 @@
 use crate::api_schema::AudioQuery;
 
 use crate::commands::AudioQueryEditCommand;
-use crate::history::Command;
+
 use eframe::egui::Ui;
 
 pub fn render_synthesis_control(

@@ -85,7 +85,7 @@ impl HistoryManager {
     pub fn undo(&mut self) {
         if let Some((mut op, uuid)) = self.undo_stack.pop() {
             op.undo(&mut self.project, &uuid);
-            if let Some((times, cursor)) = self.update_times.get_mut(&uuid) {
+            if let Some((_times, cursor)) = self.update_times.get_mut(&uuid) {
                 if *cursor > 0 {
                     *cursor -= 1;
                     log::debug!("{} revision {}", uuid, cursor);

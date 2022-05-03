@@ -1,7 +1,6 @@
 use crate::api_schema::AccentPhrase;
 use crate::commands::BottomPaneCommand;
-use crate::history::Command;
-use crate::project::VoiceVoxProject;
+
 use eframe::egui::{
     Align, Align2, FontId, Layout, NumExt, Response, SelectableLabel, TextStyle, Ui, Vec2, Widget,
 };
