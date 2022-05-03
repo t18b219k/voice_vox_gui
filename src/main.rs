@@ -699,7 +699,6 @@ impl eframe::App for VoiceVoxRust {
 #[tokio::main]
 async fn main() {
     simple_log::console("debug").unwrap();
-    api::init();
     init_blank_audio_query().await;
     chara_change_button::init_icon_store().await;
     let mut app = VoiceVoxRust::new().await;

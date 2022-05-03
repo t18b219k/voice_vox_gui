@@ -9,12 +9,12 @@ use reqwest::{Error, StatusCode};
 
 pub type CoreVersion = Option<String>;
 
-///起動時に[crate::api::init()]を使用し初期化すること.
+///シングルトン reqwest::Client
 static CLIENT: OnceBox<reqwest::Client> = once_cell::race::OnceBox::new();
 
-pub fn init() {
-    let client = reqwest::Client::new();
-    CLIENT.set(Box::new(client)).unwrap()
+///クライアントのシングルトンの作成/取得を行う.
+pub fn client() -> &'static reqwest::Client {
+    CLIENT.get_or_init(|| Box::new(reqwest::Client::new()))
 }
 
 /// # 音声合成用のクエリを作成する
@@ -32,14 +32,13 @@ impl Api for AudioQuery {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/audio_query")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .query(&[("text", &self.text)])
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -65,14 +64,13 @@ impl Api for AudioQueryFromPreset {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/audio_query_from_preset")
             .query(&[("preset_id", self.preset_id)])
             .add_core_version(&self.core_version)
             .query(&[("text", &self.text)])
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -131,15 +129,14 @@ impl Api for AccentPhrases {
     type Response = Result<AccentPhrasesResponse, AccentPhrasesErrors>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/audio_query")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .query(&[("is_kana", self.is_kana.unwrap_or(false))])
             .query(&[("text", &self.text)])
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::BAD_REQUEST => Err(AccentPhrasesErrors::KanaParseError(
@@ -166,14 +163,13 @@ impl Api for MoraData {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/mora_data")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .json(&self.accent_phrases)
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -197,14 +193,13 @@ impl Api for MoraLength {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/mora_length")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .json(&self.accent_phrases)
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -228,14 +223,13 @@ impl Api for MoraPitch {
     type Response = Result<Vec<AccentPhrase>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/mora_pitch")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .json(&self.accent_phrases)
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -260,8 +254,7 @@ impl Api for Synthesis {
     type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/synthesis")
             .query(&[("speaker", self.speaker)])
             .query(&[(
@@ -271,7 +264,7 @@ impl Api for Synthesis {
             .add_core_version(&self.core_version)
             .json(&self.audio_query)
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -295,14 +288,13 @@ impl Api for CancellableSynthesis {
     type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/cancellable_synthesis")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .json(&self.audio_query)
             .build()?;
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -329,15 +321,14 @@ impl Api for MultiSynthesis {
     type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/multi_synthesis")
             .query(&[("speaker", self.speaker)])
             .add_core_version(&self.core_version)
             .json(&self.audio_query)
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -350,7 +341,6 @@ impl Api for MultiSynthesis {
 
 #[tokio::test]
 async fn call_multi_synthesis() {
-    init();
     let aq0 = AudioQuery {
         text: "日本語".to_string(),
         speaker: 0,
@@ -395,8 +385,7 @@ impl Api for SynthesisMorphing {
     type Response = Result<Vec<u8>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/synthesis_morphing")
             .query(&[
                 ("base_speaker", self.base_speaker),
@@ -407,7 +396,7 @@ impl Api for SynthesisMorphing {
             .json(&self.audio_query)
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -420,7 +409,6 @@ impl Api for SynthesisMorphing {
 
 #[tokio::test]
 async fn call_synthesis_morphing() {
-    init();
     let speakers: Vec<crate::api_schema::Speaker> =
         Speakers { core_version: None }.call().await.unwrap();
     let id_0 = speakers[0].styles[0].id;
@@ -449,6 +437,8 @@ async fn call_synthesis_morphing() {
 /// # base64エンコードされた複数のwavデータを一つに結合する
 ///
 /// base64エンコードされたwavデータを一纏めにし、wavファイルで返します。
+/// 返されるwavはbase64デコードを行います.
+///
 pub struct ConnectWaves {
     waves: Vec<Vec<u8>>,
 }
@@ -461,13 +451,12 @@ impl Api for ConnectWaves {
         for wave in &self.waves {
             buffer.push(base64::encode(wave));
         }
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .post("http://localhost:50021/connect_waves")
             .json(&buffer)
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(base64::decode(res.text().await?).unwrap_or_default()),
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
@@ -481,7 +470,6 @@ impl Api for ConnectWaves {
 #[tokio::test]
 async fn call_connect_waves() {
     let waves = vec![];
-    init();
     println!(
         "{:?}",
         ConnectWaves { waves }.call().await.unwrap_or_default()
@@ -494,9 +482,11 @@ impl Api for Presets {
     type Response = Result<Vec<crate::api_schema::Preset>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl.get("http://localhost:50021/presets").build().unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let request = client()
+            .get("http://localhost:50021/presets")
+            .build()
+            .unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<Vec<crate::api_schema::Preset>>().await?),
             x => Err(x.into()),
@@ -506,7 +496,6 @@ impl Api for Presets {
 
 #[tokio::test]
 async fn call_presets() {
-    init();
     let presets = Presets;
     for preset in presets.call().await.unwrap() {
         println!("{:?}", preset);
@@ -519,9 +508,11 @@ impl Api for Version {
     type Response = Result<Option<String>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl.get("http://localhost:50021/version").build().unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let request = client()
+            .get("http://localhost:50021/version")
+            .build()
+            .unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<Option<String>>().await?),
             x => Err(x.into()),
@@ -531,7 +522,6 @@ impl Api for Version {
 
 #[tokio::test]
 async fn call_version() {
-    init();
     let version = Version;
     println!("{:?}", version.call().await.unwrap());
 }
@@ -542,12 +532,11 @@ impl Api for CoreVersions {
     type Response = Result<Vec<String>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .get("http://localhost:50021/core_versions")
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<Vec<String>>().await?),
             x => Err(x.into()),
@@ -557,7 +546,6 @@ impl Api for CoreVersions {
 
 #[tokio::test]
 async fn call_core_versions() {
-    init();
     let version = CoreVersions;
     println!("{:?}", version.call().await.unwrap());
 }
@@ -570,13 +558,12 @@ impl Api for Speakers {
     type Response = Result<Vec<crate::api_schema::Speaker>, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .get("http://localhost:50021/speakers")
             .add_core_version(&self.core_version)
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
@@ -589,7 +576,6 @@ impl Api for Speakers {
 
 #[tokio::test]
 async fn call_speakers() {
-    init();
     let speakers = Speakers { core_version: None };
     println!("{:?}", speakers.call().await.unwrap());
 }
@@ -603,14 +589,13 @@ impl Api for SpeakerInfo {
     type Response = Result<crate::api_schema::SpeakerInfo, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let req = cl
+        let req = client()
             .get("http://localhost:50021/speaker_info")
             .query(&[("speaker_uuid", &self.speaker_uuid)])
             .add_core_version(&self.core_version)
             .build()
             .unwrap();
-        let res = cl.execute(req).await.unwrap();
+        let res = client().execute(req).await.unwrap();
         match res.status() {
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
@@ -648,7 +633,6 @@ impl Api for SpeakerInfo {
 
 #[tokio::test]
 async fn call_speaker_info() {
-    init();
     let speakers = Speakers { core_version: None };
     let speakers = speakers.call().await.unwrap();
     let info = SpeakerInfo {
@@ -666,13 +650,12 @@ impl Api for SupportedDevices {
     type Response = Result<crate::api_schema::SupportedDevices, APIError>;
 
     async fn call(&self) -> Self::Response {
-        let cl = CLIENT.get().unwrap();
-        let request = cl
+        let request = client()
             .get("http://localhost:50021/supported_devices")
             .add_core_version(&self.core_version)
             .build()
             .unwrap();
-        let res = cl.execute(request).await.unwrap();
+        let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
                 res.json::<crate::api_schema::HttpValidationError>().await?,
@@ -685,7 +668,6 @@ impl Api for SupportedDevices {
 
 #[tokio::test]
 async fn call_supported_devices() {
-    init();
     let supported_devices = SupportedDevices { core_version: None };
     println!("{:?}", supported_devices.call().await.unwrap());
 }

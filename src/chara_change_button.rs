@@ -77,7 +77,6 @@ pub(crate) async fn init_icon_store() -> Option<()> {
 
 #[tokio::test]
 async fn test_init_icon_store() {
-    api::init();
     init_icon_store().await;
     ICON_AND_PORTRAIT_STORE.get().unwrap();
 }

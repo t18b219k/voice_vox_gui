@@ -1,0 +1,4 @@
+/target
+Cargo.lock
+.idea
+voice_vox_gui.iml
