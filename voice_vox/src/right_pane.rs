@@ -11,54 +11,54 @@ pub fn render_synthesis_control(
     let mut rt = None;
     let mut aq = aq_prev.clone();
     ui.vertical(|ui| {
-        ui.label(format!("話速 {}", aq.speed_scale));
-        let slider = eframe::egui::Slider::new(&mut aq.speed_scale, 0.50..=2.0).show_value(false);
+        ui.label(format!("話速 {}", aq.speedScale));
+        let slider = eframe::egui::Slider::new(&mut aq.speedScale, 0.50..=2.0).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::SpeedScale(
-                aq.speed_scale - aq_prev.speed_scale,
+                aq.speedScale - aq_prev.speedScale,
             ));
             return;
         }
-        ui.label(format!("音高 {}", aq.pitch_scale));
-        let slider = eframe::egui::Slider::new(&mut aq.pitch_scale, -0.15..=0.15).show_value(false);
+        ui.label(format!("音高 {}", aq.pitchScale));
+        let slider = eframe::egui::Slider::new(&mut aq.pitchScale, -0.15..=0.15).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::PitchScale(
-                aq.pitch_scale - aq_prev.pitch_scale,
+                aq.pitchScale - aq_prev.pitchScale,
             ));
             return;
         }
-        ui.label(format!("抑揚 {}", aq.intonation_scale));
+        ui.label(format!("抑揚 {}", aq.intonationScale));
         let slider =
-            eframe::egui::Slider::new(&mut aq.intonation_scale, 0.0..=2.0).show_value(false);
+            eframe::egui::Slider::new(&mut aq.intonationScale, 0.0..=2.0).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::IntonationScale(
-                aq.intonation_scale - aq_prev.intonation_scale,
+                aq.intonationScale - aq_prev.intonationScale,
             ));
             return;
         }
-        ui.label(format!("音量 {}", aq.volume_scale));
-        let slider = eframe::egui::Slider::new(&mut aq.volume_scale, 0.0..=2.0).show_value(false);
+        ui.label(format!("音量 {}", aq.volumeScale));
+        let slider = eframe::egui::Slider::new(&mut aq.volumeScale, 0.0..=2.0).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::VolumeScale(
-                aq.volume_scale - aq_prev.volume_scale,
+                aq.volumeScale - aq_prev.volumeScale,
             ));
             return;
         }
-        ui.label(format!("開始無音 {}", aq.pre_phoneme_length));
+        ui.label(format!("開始無音 {}", aq.prePhonemeLength));
         let slider =
-            eframe::egui::Slider::new(&mut aq.pre_phoneme_length, 0.0..=1.5).show_value(false);
+            eframe::egui::Slider::new(&mut aq.prePhonemeLength, 0.0..=1.5).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::PrePhonemeLength(
-                aq.pre_phoneme_length - aq_prev.pre_phoneme_length,
+                aq.prePhonemeLength - aq_prev.prePhonemeLength,
             ));
             return;
         }
-        ui.label(format!("終了無音 {}", aq.post_phoneme_length));
+        ui.label(format!("終了無音 {}", aq.postPhonemeLength));
         let slider =
-            eframe::egui::Slider::new(&mut aq.post_phoneme_length, 0.0..=1.5).show_value(false);
+            eframe::egui::Slider::new(&mut aq.postPhonemeLength, 0.0..=1.5).show_value(false);
         if ui.add(slider).drag_released() {
             rt = Some(AudioQueryEditCommand::PostPhonemeLength(
-                aq.post_phoneme_length - aq_prev.post_phoneme_length,
+                aq.postPhonemeLength - aq_prev.postPhonemeLength,
             ));
             return;
         }

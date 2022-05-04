@@ -15,11 +15,11 @@ pub enum AudioQueryCommands {
 impl Command for AudioQueryCommands {
     fn invoke(&mut self, project: &mut VoiceVoxProject, uuid: &str) {
         match self {
-            AudioQueryCommands::Remove(pos_save, ref mut save) => {
+            AudioQueryCommands::Remove(posSave, ref mut save) => {
                 let pos = project.audioKeys.iter().enumerate().find(|x| x.1 == uuid);
                 if let Some((index, _)) = pos {
                     project.audioKeys.remove(index);
-                    *pos_save = index;
+                    *posSave = index;
                 }
 
                 if let Some(value) = project.audioItems.remove(uuid) {
@@ -317,22 +317,22 @@ impl Command for AudioQueryEditCommand {
             if let Some(query) = &mut cell.query {
                 match self {
                     AudioQueryEditCommand::SpeedScale(x) => {
-                        query.speed_scale += *x;
+                        query.speedScale += *x;
                     }
                     AudioQueryEditCommand::PitchScale(x) => {
-                        query.pitch_scale += *x;
+                        query.pitchScale += *x;
                     }
                     AudioQueryEditCommand::VolumeScale(x) => {
-                        query.volume_scale += *x;
+                        query.volumeScale += *x;
                     }
                     AudioQueryEditCommand::PrePhonemeLength(x) => {
-                        query.pre_phoneme_length += *x;
+                        query.prePhonemeLength += *x;
                     }
                     AudioQueryEditCommand::PostPhonemeLength(x) => {
-                        query.post_phoneme_length += *x;
+                        query.postPhonemeLength += *x;
                     }
                     AudioQueryEditCommand::IntonationScale(x) => {
-                        query.intonation_scale += *x;
+                        query.intonationScale += *x;
                     }
                 };
             }
@@ -344,22 +344,22 @@ impl Command for AudioQueryEditCommand {
             if let Some(query) = &mut cell.query {
                 match self {
                     AudioQueryEditCommand::SpeedScale(x) => {
-                        query.speed_scale -= *x;
+                        query.speedScale -= *x;
                     }
                     AudioQueryEditCommand::PitchScale(x) => {
-                        query.pitch_scale -= *x;
+                        query.pitchScale -= *x;
                     }
                     AudioQueryEditCommand::VolumeScale(x) => {
-                        query.volume_scale -= *x;
+                        query.volumeScale -= *x;
                     }
                     AudioQueryEditCommand::PrePhonemeLength(x) => {
-                        query.pre_phoneme_length -= *x;
+                        query.prePhonemeLength -= *x;
                     }
                     AudioQueryEditCommand::PostPhonemeLength(x) => {
-                        query.post_phoneme_length -= *x;
+                        query.postPhonemeLength -= *x;
                     }
                     AudioQueryEditCommand::IntonationScale(x) => {
-                        query.intonation_scale -= *x;
+                        query.intonationScale -= *x;
                     }
                 };
             }
