@@ -3,7 +3,7 @@ name = "voice_vox_api"
 version = "0.11.4"
 edition = "2021"
 readme = "README.md"
-license = "MIT OR APACHE-2.0"
+license = "MIT OR Apache-2.0"
 description ="VoiceVox Engine openapi rust binding."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
