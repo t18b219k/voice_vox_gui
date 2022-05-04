@@ -3,7 +3,7 @@
 
 ## How to use
  1. install VoiceVox
- 2. add to dependency with voice_vox_api , reqwest and tokio.
+ 2. add to dependency with voice_vox_api and tokio.
  3. startup VoiceVox or VoiceVox Engine eg. run.exe
  4. fill parameters in api fields and .call().await.
 ## works grate crates.
