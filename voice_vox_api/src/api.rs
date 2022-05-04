@@ -23,10 +23,11 @@ pub fn client() -> &'static reqwest::Client {
 ///
 
 pub struct AudioQuery {
-    pub(crate) text: String,
-    pub(crate) speaker: i32,
-    pub(crate) core_version: Option<String>,
+    pub text: String,
+    pub speaker: i32,
+    pub core_version: Option<String>,
 }
+
 #[async_trait]
 impl Api for AudioQuery {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
@@ -59,6 +60,7 @@ struct AudioQueryFromPreset {
     preset_id: i32,
     core_version: CoreVersion,
 }
+
 #[async_trait]
 impl Api for AudioQueryFromPreset {
     type Response = Result<crate::api_schema::AudioQuery, APIError>;
@@ -100,10 +102,10 @@ pub trait Api {
 /// * アクセント句末に`？`(全角)を入れることにより疑問文の発音ができる。
 ///
 pub struct AccentPhrases {
-    pub(crate) text: String,
-    pub(crate) speaker: i32,
-    pub(crate) is_kana: Option<bool>,
-    pub(crate) core_version: CoreVersion,
+    pub text: String,
+    pub speaker: i32,
+    pub is_kana: Option<bool>,
+    pub core_version: CoreVersion,
 }
 
 #[derive(Debug)]
@@ -158,6 +160,7 @@ pub struct MoraData {
     //in body
     accent_phrases: Vec<AccentPhrase>,
 }
+
 #[async_trait]
 impl Api for MoraData {
     type Response = Result<Vec<AccentPhrase>, APIError>;
@@ -188,6 +191,7 @@ pub struct MoraLength {
     // in body.
     accent_phrases: Vec<AccentPhrase>,
 }
+
 #[async_trait]
 impl Api for MoraLength {
     type Response = Result<Vec<AccentPhrase>, APIError>;
@@ -243,11 +247,11 @@ impl Api for MoraPitch {
 /// # 音声合成する
 pub struct Synthesis {
     // in query
-    pub(crate) speaker: i32,
-    pub(crate) enable_interrogative_upspeak: Option<bool>,
-    pub(crate) core_version: CoreVersion,
+    pub speaker: i32,
+    pub enable_interrogative_upspeak: Option<bool>,
+    pub core_version: CoreVersion,
     // in body json.
-    pub(crate) audio_query: crate::api_schema::AudioQuery,
+    pub audio_query: crate::api_schema::AudioQuery,
 }
 #[async_trait]
 impl Api for Synthesis {
@@ -278,10 +282,10 @@ impl Api for Synthesis {
 /// # 音声合成する（キャンセル可能）
 pub struct CancellableSynthesis {
     // in query
-    pub(crate) speaker: i32,
-    pub(crate) core_version: CoreVersion,
+    pub speaker: i32,
+    pub core_version: CoreVersion,
     // in body json.
-    pub(crate) audio_query: crate::api_schema::AudioQuery,
+    pub audio_query: crate::api_schema::AudioQuery,
 }
 #[async_trait]
 impl Api for CancellableSynthesis {
@@ -310,10 +314,10 @@ impl Api for CancellableSynthesis {
 /// 複数のwavがzipでまとめられて返されます.
 pub struct MultiSynthesis {
     // in query
-    pub(crate) speaker: i32,
-    pub(crate) core_version: CoreVersion,
+    pub speaker: i32,
+    pub core_version: CoreVersion,
     // in body json.
-    pub(crate) audio_query: Vec<crate::api_schema::AudioQuery>,
+    pub audio_query: Vec<crate::api_schema::AudioQuery>,
 }
 
 #[async_trait]
@@ -372,12 +376,12 @@ async fn call_multi_synthesis() {
 /// 指定された2人の話者で音声を合成、指定した割合でモーフィングした音声を得ます。 モーフィングの割合はmorph_rateで指定でき、0.0でベースの話者、1.0でターゲットの話者に近づきます。
 pub struct SynthesisMorphing {
     // in query
-    pub(crate) base_speaker: i32,
-    pub(crate) target_speaker: i32,
-    pub(crate) morph_rate: f64,
-    pub(crate) core_version: CoreVersion,
+    pub base_speaker: i32,
+    pub target_speaker: i32,
+    pub morph_rate: f64,
+    pub core_version: CoreVersion,
     // in body json.
-    pub(crate) audio_query: crate::api_schema::AudioQuery,
+    pub audio_query: crate::api_schema::AudioQuery,
 }
 
 #[async_trait]
@@ -442,6 +446,7 @@ async fn call_synthesis_morphing() {
 pub struct ConnectWaves {
     waves: Vec<Vec<u8>>,
 }
+
 #[async_trait]
 impl Api for ConnectWaves {
     type Response = Result<Vec<u8>, APIError>;
@@ -477,6 +482,7 @@ async fn call_connect_waves() {
 }
 
 pub struct Presets;
+
 #[async_trait]
 impl Api for Presets {
     type Response = Result<Vec<crate::api_schema::Preset>, APIError>;
@@ -503,6 +509,7 @@ async fn call_presets() {
 }
 
 pub struct Version;
+
 #[async_trait]
 impl Api for Version {
     type Response = Result<Option<String>, APIError>;
@@ -527,6 +534,7 @@ async fn call_version() {
 }
 
 pub struct CoreVersions;
+
 #[async_trait]
 impl Api for CoreVersions {
     type Response = Result<Vec<String>, APIError>;
@@ -551,8 +559,9 @@ async fn call_core_versions() {
 }
 
 pub struct Speakers {
-    pub(crate) core_version: CoreVersion,
+    pub core_version: CoreVersion,
 }
+
 #[async_trait]
 impl Api for Speakers {
     type Response = Result<Vec<crate::api_schema::Speaker>, APIError>;
@@ -581,9 +590,10 @@ async fn call_speakers() {
 }
 
 pub struct SpeakerInfo {
-    pub(crate) speaker_uuid: String,
-    pub(crate) core_version: CoreVersion,
+    pub speaker_uuid: String,
+    pub core_version: CoreVersion,
 }
+
 #[async_trait]
 impl Api for SpeakerInfo {
     type Response = Result<crate::api_schema::SpeakerInfo, APIError>;
@@ -645,6 +655,7 @@ async fn call_speaker_info() {
 pub struct SupportedDevices {
     core_version: CoreVersion,
 }
+
 #[async_trait]
 impl Api for SupportedDevices {
     type Response = Result<crate::api_schema::SupportedDevices, APIError>;
@@ -705,6 +716,7 @@ impl Into<APIError> for std::io::Error {
         APIError::Io(self)
     }
 }
+
 impl From<StatusCode> for APIError {
     fn from(_: StatusCode) -> Self {
         APIError::Unknown

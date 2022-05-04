@@ -1,28 +1,19 @@
 //! definition of VoiceVox openapi schema section.
-//!
-//!
+#![allow(dead_code)]
 
 use serde::{Deserialize, Serialize};
-
+#[allow(non_snake_case)]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AudioQuery {
     pub accent_phrases: Vec<AccentPhrase>,
-    #[serde(rename = "speedScale")]
-    pub speed_scale: f32,
-    #[serde(rename = "pitchScale")]
-    pub pitch_scale: f32,
-    #[serde(rename = "intonationScale")]
-    pub intonation_scale: f32,
-    #[serde(rename = "volumeScale")]
-    pub volume_scale: f32,
-    #[serde(rename = "prePhonemeLength")]
-    pub pre_phoneme_length: f32,
-    #[serde(rename = "postPhonemeLength")]
-    pub post_phoneme_length: f32,
-    #[serde(rename = "outputSamplingRate")]
-    pub output_sampling_rate: i32,
-    #[serde(rename = "outputStereo")]
-    pub output_stereo: bool,
+    pub speedScale: f32,
+    pub pitchScale: f32,
+    pub intonationScale: f32,
+    pub volumeScale: f32,
+    pub prePhonemeLength: f32,
+    pub postPhonemeLength: f32,
+    pub outputSamplingRate: i32,
+    pub outputStereo: bool,
     pub kana: Option<String>,
 }
 
@@ -90,57 +81,77 @@ pub struct Preset {
 
 #[derive(Deserialize, Debug)]
 pub struct Speaker {
+    /// character name
     pub name: String,
-    pub(crate) speaker_uuid: String,
+    /// used to call SpeakerInfo.
+    pub speaker_uuid: String,
+    /// collection of emotion style.
     pub styles: Vec<SpeakerStyle>,
     pub version: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct SpeakerStyle {
-    pub(crate) name: String,
-    pub(crate) id: i32,
+    /// emotion style.
+    pub name: String,
+    /// style_id or speaker same as [StyleInfo.id]
+    pub id: i32,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SpeakerInfoRaw {
-    pub policy: String,
+pub(crate) struct SpeakerInfoRaw {
+    pub(crate) policy: String,
     /// base64
-    pub portrait: String,
+    pub(crate) portrait: String,
 
-    pub style_infos: Vec<StyleInfoRaw>,
+    pub(crate) style_infos: Vec<StyleInfoRaw>,
 }
 
 #[derive(Deserialize, Debug)]
-pub struct StyleInfoRaw {
-    pub id: i32,
+pub(crate) struct StyleInfoRaw {
+    pub(crate) id: i32,
     /// base64
-    pub icon: String,
+    pub(crate) icon: String,
     /// base64
-    pub voice_samples: Vec<String>,
+    pub(crate) voice_samples: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct SpeakerInfo {
     /// markdown format.
-    pub(crate) policy: String,
-    /// base64 encoded png file.
-    pub(crate) portrait: Vec<u8>,
-    pub(crate) style_infos: Vec<StyleInfo>,
+    pub policy: String,
+    /// png file.
+    pub portrait: Vec<u8>,
+    pub style_infos: Vec<StyleInfo>,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct StyleInfo {
-    pub(crate) id: i32,
+    /// style_id or speaker. you can put into below API fields.
+    /// * AudioQuery.speaker
+    /// * AccentPhrases.speaker
+    /// * MoraData.speaker
+    /// * MoraPitch.speaker
+    /// * MoraLength.speaker
+    /// * Synthesis.speaker
+    /// * CancellableSynthesis.speaker
+    /// * MultiSynthesis.speaker
+    /// * SynthesisMorphing.base_speaker
+    /// * SynthesisMorphing.target_speaker
+    pub id: i32,
     ///png file
-    pub(crate) icon: Vec<u8>,
+    pub icon: Vec<u8>,
     ///wav file
-    pub(crate) voice_samples: Vec<Vec<u8>>,
+    pub voice_samples: Vec<Vec<u8>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SupportedDevices {
+    /// always support
     cpu: bool,
+    /// if enabled when Nvidia gpu + 3GiB VRam
     cuda: bool,
+    /// if enabled when DirectML supported by engine.
+    /// in engine 0.11.4 not supported.
     dml: Option<bool>,
 }

@@ -16,8 +16,8 @@ use std::io::Cursor;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::oneshot::Receiver;
 
-mod api;
-mod api_schema;
+use voice_vox_api::api;
+use voice_vox_api::api_schema;
 mod bottom_pane;
 mod chara_change_button;
 mod commands;
