@@ -3,7 +3,7 @@ name = "voice_vox_api"
 version = "0.11.4"
 edition = "2021"
 readme = "README.md"
-license = "MIT or APACHE 2.0"
+license = "MIT OR APACHE-2.0"
 description ="VoiceVox Engine openapi rust binding."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -15,4 +15,5 @@ log = "0.4"
 once_cell = "1.10"
 reqwest ={ version = "0.11", features = ["serde_json","json"] }
 serde ={ version = "1", features = ["derive"] }
+[dev-dependencies]
 tokio = { version = "1", features = ["macros"] }

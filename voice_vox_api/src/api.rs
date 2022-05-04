@@ -55,10 +55,10 @@ impl Api for AudioQuery {
 /// クエリの初期値を得ます。ここで得られたクエリはそのまま音声合成に利用できます。各値の意味は`Schemas`を参照してください。
 ///
 ///
-struct AudioQueryFromPreset {
-    text: String,
-    preset_id: i32,
-    core_version: CoreVersion,
+pub struct AudioQueryFromPreset {
+    pub text: String,
+    pub preset_id: i32,
+    pub core_version: CoreVersion,
 }
 
 #[async_trait]
@@ -155,10 +155,10 @@ impl Api for AccentPhrases {
 ///アクセント句から音高を得る
 pub struct MoraData {
     //in query
-    speaker: i32,
-    core_version: CoreVersion,
+    pub speaker: i32,
+    pub core_version: CoreVersion,
     //in body
-    accent_phrases: Vec<AccentPhrase>,
+    pub accent_phrases: Vec<AccentPhrase>,
 }
 
 #[async_trait]
@@ -186,10 +186,10 @@ impl Api for MoraData {
 /// # アクセント句から音素長を得る
 pub struct MoraLength {
     // in query.
-    speaker: i32,
-    core_version: CoreVersion,
+    pub speaker: i32,
+    pub core_version: CoreVersion,
     // in body.
-    accent_phrases: Vec<AccentPhrase>,
+    pub accent_phrases: Vec<AccentPhrase>,
 }
 
 #[async_trait]
@@ -217,10 +217,10 @@ impl Api for MoraLength {
 /// # アクセント句から音素長を得る
 pub struct MoraPitch {
     // in query.
-    speaker: i32,
-    core_version: CoreVersion,
+    pub speaker: i32,
+    pub core_version: CoreVersion,
     // in body.
-    accent_phrases: Vec<AccentPhrase>,
+    pub accent_phrases: Vec<AccentPhrase>,
 }
 #[async_trait]
 impl Api for MoraPitch {
@@ -343,34 +343,6 @@ impl Api for MultiSynthesis {
     }
 }
 
-#[tokio::test]
-async fn call_multi_synthesis() {
-    let aq0 = AudioQuery {
-        text: "日本語".to_string(),
-        speaker: 0,
-        core_version: None,
-    }
-    .call()
-    .await
-    .unwrap();
-    let aq1 = AudioQuery {
-        text: "音声合成".to_string(),
-        speaker: 0,
-        core_version: None,
-    }
-    .call()
-    .await
-    .unwrap();
-    MultiSynthesis {
-        speaker: 0,
-        core_version: None,
-        audio_query: vec![aq0, aq1],
-    }
-    .call()
-    .await
-    .unwrap();
-}
-
 /// # 2人の話者でモーフィングした音声を合成する
 ///
 /// 指定された2人の話者で音声を合成、指定した割合でモーフィングした音声を得ます。 モーフィングの割合はmorph_rateで指定でき、0.0でベースの話者、1.0でターゲットの話者に近づきます。
@@ -411,40 +383,13 @@ impl Api for SynthesisMorphing {
     }
 }
 
-#[tokio::test]
-async fn call_synthesis_morphing() {
-    let speakers: Vec<crate::api_schema::Speaker> =
-        Speakers { core_version: None }.call().await.unwrap();
-    let id_0 = speakers[0].styles[0].id;
-    let id_1 = speakers[1].styles[0].id;
-
-    let aq = AudioQuery {
-        text: "音声合成".to_string(),
-        speaker: id_0,
-        core_version: None,
-    }
-    .call()
-    .await
-    .unwrap();
-    SynthesisMorphing {
-        base_speaker: id_0,
-        target_speaker: id_1,
-        morph_rate: 0.5,
-        core_version: None,
-        audio_query: aq,
-    }
-    .call()
-    .await
-    .unwrap();
-}
-
 /// # base64エンコードされた複数のwavデータを一つに結合する
 ///
 /// base64エンコードされたwavデータを一纏めにし、wavファイルで返します。
 /// 返されるwavはbase64デコードを行います.
 ///
 pub struct ConnectWaves {
-    waves: Vec<Vec<u8>>,
+    pub waves: Vec<Vec<u8>>,
 }
 
 #[async_trait]
@@ -472,15 +417,6 @@ impl Api for ConnectWaves {
     }
 }
 
-#[tokio::test]
-async fn call_connect_waves() {
-    let waves = vec![];
-    println!(
-        "{:?}",
-        ConnectWaves { waves }.call().await.unwrap_or_default()
-    );
-}
-
 pub struct Presets;
 
 #[async_trait]
@@ -497,14 +433,6 @@ impl Api for Presets {
             StatusCode::OK => Ok(res.json::<Vec<crate::api_schema::Preset>>().await?),
             x => Err(x.into()),
         }
-    }
-}
-
-#[tokio::test]
-async fn call_presets() {
-    let presets = Presets;
-    for preset in presets.call().await.unwrap() {
-        println!("{:?}", preset);
     }
 }
 
@@ -527,12 +455,6 @@ impl Api for Version {
     }
 }
 
-#[tokio::test]
-async fn call_version() {
-    let version = Version;
-    println!("{:?}", version.call().await.unwrap());
-}
-
 pub struct CoreVersions;
 
 #[async_trait]
@@ -550,12 +472,6 @@ impl Api for CoreVersions {
             x => Err(x.into()),
         }
     }
-}
-
-#[tokio::test]
-async fn call_core_versions() {
-    let version = CoreVersions;
-    println!("{:?}", version.call().await.unwrap());
 }
 
 pub struct Speakers {
@@ -581,12 +497,6 @@ impl Api for Speakers {
             x => Err(x.into()),
         }
     }
-}
-
-#[tokio::test]
-async fn call_speakers() {
-    let speakers = Speakers { core_version: None };
-    println!("{:?}", speakers.call().await.unwrap());
 }
 
 pub struct SpeakerInfo {
@@ -641,19 +551,8 @@ impl Api for SpeakerInfo {
     }
 }
 
-#[tokio::test]
-async fn call_speaker_info() {
-    let speakers = Speakers { core_version: None };
-    let speakers = speakers.call().await.unwrap();
-    let info = SpeakerInfo {
-        speaker_uuid: speakers[0].speaker_uuid.clone(),
-        core_version: None,
-    };
-    println!("{:?}", info.call().await);
-}
-
 pub struct SupportedDevices {
-    core_version: CoreVersion,
+    pub core_version: CoreVersion,
 }
 
 #[async_trait]
@@ -675,12 +574,6 @@ impl Api for SupportedDevices {
             x => Err(x.into()),
         }
     }
-}
-
-#[tokio::test]
-async fn call_supported_devices() {
-    let supported_devices = SupportedDevices { core_version: None };
-    println!("{:?}", supported_devices.call().await.unwrap());
 }
 
 pub trait AddCoreVersion {
