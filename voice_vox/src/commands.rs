@@ -15,11 +15,11 @@ pub enum AudioQueryCommands {
 impl Command for AudioQueryCommands {
     fn invoke(&mut self, project: &mut VoiceVoxProject, uuid: &str) {
         match self {
-            AudioQueryCommands::Remove(posSave, ref mut save) => {
+            AudioQueryCommands::Remove(pos_save, ref mut save) => {
                 let pos = project.audioKeys.iter().enumerate().find(|x| x.1 == uuid);
                 if let Some((index, _)) = pos {
                     project.audioKeys.remove(index);
-                    *posSave = index;
+                    *pos_save = index;
                 }
 
                 if let Some(value) = project.audioItems.remove(uuid) {
