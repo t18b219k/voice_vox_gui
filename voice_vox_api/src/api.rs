@@ -6,6 +6,7 @@ use crate::api_schema::{AccentPhrase, AccentPhrasesResponse, HttpValidationError
 use async_trait::async_trait;
 use once_cell::race::OnceBox;
 use reqwest::{Error, StatusCode};
+use std::io::ErrorKind;
 
 pub type CoreVersion = Option<String>;
 
@@ -13,7 +14,7 @@ pub type CoreVersion = Option<String>;
 static CLIENT: OnceBox<reqwest::Client> = once_cell::race::OnceBox::new();
 
 ///クライアントのシングルトンの作成/取得を行う.
-pub fn client() -> &'static reqwest::Client {
+fn client() -> &'static reqwest::Client {
     CLIENT.get_or_init(|| Box::new(reqwest::Client::new()))
 }
 
@@ -42,9 +43,7 @@ impl Api for AudioQuery {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -75,9 +74,7 @@ impl Api for AudioQueryFromPreset {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -141,11 +138,11 @@ impl Api for AccentPhrases {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::BAD_REQUEST => Err(AccentPhrasesErrors::KanaParseError(
-                res.json::<KanaParseError>().await?,
-            )),
+            StatusCode::BAD_REQUEST => {
+                Err(AccentPhrasesErrors::KanaParseError(res.json::<_>().await?))
+            }
             StatusCode::UNPROCESSABLE_ENTITY => Err(AccentPhrasesErrors::ApiError(
-                APIError::Validation(res.json::<HttpValidationError>().await?),
+                APIError::Validation(res.json::<_>().await?),
             )),
             x => Err(x.into()),
         }
@@ -175,9 +172,7 @@ impl Api for MoraData {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -206,9 +201,7 @@ impl Api for MoraLength {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -236,9 +229,7 @@ impl Api for MoraPitch {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.json::<_>().await?),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -271,9 +262,7 @@ impl Api for Synthesis {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -301,9 +290,7 @@ impl Api for CancellableSynthesis {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -335,9 +322,7 @@ impl Api for MultiSynthesis {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -375,9 +360,7 @@ impl Api for SynthesisMorphing {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(res.bytes().await.unwrap_or_default().to_vec()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -409,9 +392,7 @@ impl Api for ConnectWaves {
         let res = client().execute(request).await.unwrap();
         match res.status() {
             StatusCode::OK => Ok(base64::decode(res.text().await?).unwrap_or_default()),
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             x => Err(x.into()),
         }
     }
@@ -490,9 +471,7 @@ impl Api for Speakers {
             .unwrap();
         let res = client().execute(request).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<crate::api_schema::HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             StatusCode::OK => Ok(res.json::<Vec<crate::api_schema::Speaker>>().await?),
             x => Err(x.into()),
         }
@@ -517,35 +496,12 @@ impl Api for SpeakerInfo {
             .unwrap();
         let res = client().execute(req).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<crate::api_schema::HttpValidationError>().await?,
-            )),
-            StatusCode::OK => Ok({
-                let raw = res.json::<crate::api_schema::SpeakerInfoRaw>().await?;
-                crate::api_schema::SpeakerInfo {
-                    policy: raw.policy,
-                    portrait: base64::decode(raw.portrait).unwrap_or_default(),
-                    style_infos: raw
-                        .style_infos
-                        .iter()
-                        .map(|si| {
-                            let crate::api_schema::StyleInfoRaw {
-                                id,
-                                icon,
-                                voice_samples,
-                            } = si;
-                            crate::api_schema::StyleInfo {
-                                id: *id,
-                                icon: base64::decode(icon).unwrap_or_default(),
-                                voice_samples: voice_samples
-                                    .iter()
-                                    .map(|voice| base64::decode(voice).unwrap_or_default())
-                                    .collect(),
-                            }
-                        })
-                        .collect(),
-                }
-            }),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
+            StatusCode::OK => res
+                .json::<crate::api_schema::SpeakerInfoRaw>()
+                .await?
+                .try_into()
+                .map_err(|_| APIError::Io(std::io::Error::from(ErrorKind::InvalidData))),
             x => Err(x.into()),
         }
     }
@@ -567,9 +523,7 @@ impl Api for SupportedDevices {
             .unwrap();
         let res = client().execute(request).await.unwrap();
         match res.status() {
-            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(
-                res.json::<crate::api_schema::HttpValidationError>().await?,
-            )),
+            StatusCode::UNPROCESSABLE_ENTITY => Err(APIError::Validation(res.json::<_>().await?)),
             StatusCode::OK => Ok(res.json::<crate::api_schema::SupportedDevices>().await?),
             x => Err(x.into()),
         }

@@ -1,7 +1,9 @@
 //! definition of VoiceVox openapi schema section.
 #![allow(dead_code)]
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
+use serde::ser::SerializeStruct;
+
 #[allow(non_snake_case)]
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AudioQuery {
@@ -36,50 +38,50 @@ pub struct Mora {
 }
 
 #[allow(non_snake_case)]
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct HttpValidationError {
-    detail: Vec<ValidationError>,
+    pub detail: Vec<ValidationError>,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct ValidationError {
     ///Location
-    loc: Vec<String>,
+    pub loc: Vec<String>,
     ///Message
-    msg: String,
+    pub msg: String,
     ///Error Type
     #[serde(rename = "type")]
-    _type: String,
+    pub _type: String,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct AccentPhrasesResponse {
-    accent_phrases: Vec<AccentPhrase>,
+    pub accent_phrases: Vec<AccentPhrase>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct KanaParseError {
-    text: String,
-    error_name: String,
-    error_args: String,
+    pub text: String,
+    pub error_name: String,
+    pub error_args: String,
 }
 
 #[allow(non_snake_case, unused_variables)]
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Preset {
-    id: i32,
-    name: String,
-    speaker_uuid: String,
-    style_id: i32,
-    speedScale: f32,
-    pitchScale: f32,
-    intonationScale: f32,
-    volumeScale: f32,
-    prePhonemeLength: f32,
-    postPhonemeLength: f32,
+    pub id: i32,
+    pub name: String,
+    pub speaker_uuid: String,
+    pub style_id: i32,
+    pub speedScale: f32,
+    pub pitchScale: f32,
+    pub intonationScale: f32,
+    pub volumeScale: f32,
+    pub prePhonemeLength: f32,
+    pub postPhonemeLength: f32,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Speaker {
     /// character name
     pub name: String,
@@ -90,7 +92,7 @@ pub struct Speaker {
     pub version: Option<String>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct SpeakerStyle {
     /// emotion style.
     pub name: String,
@@ -98,17 +100,8 @@ pub struct SpeakerStyle {
     pub id: i32,
 }
 
-#[derive(Debug, Deserialize)]
-pub(crate) struct SpeakerInfoRaw {
-    pub(crate) policy: String,
-    /// base64
-    pub(crate) portrait: String,
-
-    pub(crate) style_infos: Vec<StyleInfoRaw>,
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct StyleInfoRaw {
+#[derive(Deserialize, Debug, Serialize)]
+pub struct StyleInfoRaw {
     pub(crate) id: i32,
     /// base64
     pub(crate) icon: String,
@@ -116,7 +109,36 @@ pub(crate) struct StyleInfoRaw {
     pub(crate) voice_samples: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+impl TryFrom<StyleInfoRaw> for StyleInfo {
+    type Error = TryFromRawError;
+    fn try_from(raw: StyleInfoRaw) -> Result<Self, <Self as TryFrom<StyleInfoRaw>>::Error> {
+        Ok(Self {
+            id: raw.id,
+            icon: base64::decode(raw.icon).map_err(|_| TryFromRawError::Base64Decode)?,
+            voice_samples: raw
+                .voice_samples
+                .iter()
+                .filter_map(|b64| base64::decode(b64).ok())
+                .collect(),
+        })
+    }
+}
+
+impl From<StyleInfo> for StyleInfoRaw {
+    fn from(mut si: StyleInfo) -> Self {
+        Self {
+            id: si.id,
+            icon: base64::encode(si.icon),
+            voice_samples: si
+                .voice_samples
+                .drain(..)
+                .map(|bytes| base64::encode(bytes))
+                .collect(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct SpeakerInfo {
     /// markdown format.
     pub policy: String,
@@ -125,7 +147,45 @@ pub struct SpeakerInfo {
     pub style_infos: Vec<StyleInfo>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize, Serialize)]
+pub struct SpeakerInfoRaw {
+    pub(crate) policy: String,
+    /// base64
+    pub(crate) portrait: String,
+
+    pub(crate) style_infos: Vec<StyleInfoRaw>,
+}
+
+pub enum TryFromRawError {
+    Base64Decode,
+}
+
+impl TryFrom<SpeakerInfoRaw> for SpeakerInfo {
+    type Error = TryFromRawError;
+    fn try_from(mut raw: SpeakerInfoRaw) -> Result<Self, Self::Error> {
+        Ok(Self {
+            policy: raw.policy,
+            portrait: base64::decode(raw.portrait).map_err(|_| TryFromRawError::Base64Decode)?,
+            style_infos: raw
+                .style_infos
+                .drain(..)
+                .filter_map(|si_raw| si_raw.try_into().ok())
+                .collect(),
+        })
+    }
+}
+
+impl From<SpeakerInfo> for SpeakerInfoRaw {
+    fn from(mut si: SpeakerInfo) -> Self {
+        Self {
+            policy: si.policy,
+            portrait: base64::encode(&si.portrait),
+            style_infos: si.style_infos.drain(..).map(|si| si.into()).collect(),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct StyleInfo {
     /// style_id or speaker. you can put into below API fields.
     /// * AudioQuery.speaker
@@ -148,10 +208,10 @@ pub struct StyleInfo {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct SupportedDevices {
     /// always support
-    cpu: bool,
+    pub cpu: bool,
     /// if enabled when Nvidia gpu + 3GiB VRam
-    cuda: bool,
+    pub cuda: bool,
     /// if enabled when DirectML supported by engine.
     /// in engine 0.11.4 not supported.
-    dml: Option<bool>,
+    pub dml: Option<bool>,
 }
