@@ -68,13 +68,13 @@ impl Command for AudioQueryCommands {
             AudioQueryCommands::UpdateAccentPhrases {
                 new_text,
                 prev_text,
-                accent_phrases: accentPhrases,
+                accent_phrases,
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     ai.text = prev_text.clone();
                     log::debug!("{} text {} -> {}", uuid, new_text, prev_text);
                     if let Some(aq) = &mut ai.query {
-                        std::mem::swap(&mut aq.accentPhrases, accentPhrases);
+                        std::mem::swap(&mut aq.accentPhrases, accent_phrases);
                         log::debug!("swapped {} accent_phrases", uuid);
                     }
                 }

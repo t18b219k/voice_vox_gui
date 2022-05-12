@@ -179,7 +179,8 @@ impl eframe::App for VoiceVoxRust {
                         std::fs::write(
                             path.clone(),
                             serde_json::to_string(&self.histories.project).unwrap(),
-                        );
+                        )
+                        .unwrap();
                         let path = path.to_str().map(|st| st.to_owned());
 
                         self.opening_file = path;
