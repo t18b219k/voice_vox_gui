@@ -33,6 +33,7 @@ mod tool_bar;
 enum DialogueKind {
     ExitCustomize,
     RestoreDefault,
+    AskDeleteProgress,
 }
 
 struct VoiceVoxRust {
@@ -55,7 +56,7 @@ struct VoiceVoxRust {
     synthesis_cache: HashMap<(String, tokio::time::Instant), SynthesisState>,
 }
 
-static BLANK_AUDIO_QUERY: once_cell::race::OnceBox<api_schema::AudioQuery> =
+pub static BLANK_AUDIO_QUERY: once_cell::race::OnceBox<api_schema::AudioQuery> =
     once_cell::race::OnceBox::new();
 
 async fn init_blank_audio_query() {
@@ -95,7 +96,7 @@ impl VoiceVoxRust {
             opening_dialogues: None,
             current_selected_tts_line: String::new(),
             back_up_text: "".to_string(),
-            histories: crate::history::HistoryManager::new().await,
+            histories: crate::history::HistoryManager::new(),
             audio_query_jobs: Default::default(),
             current_displaying: Displaying::Accent,
             synthesis_cache: HashMap::new(),
@@ -141,8 +142,9 @@ enum SynthesisState {
 impl eframe::App for VoiceVoxRust {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
         frame.set_window_title(&format!(
-            "{} VoiceVox",
-            self.opening_file.as_ref().unwrap_or(&"*".to_owned())
+            "{} {} VoiceVox",
+            if self.histories.saved() { "" } else { "*" },
+            self.opening_file.as_ref().unwrap_or(&"".to_owned())
         ));
 
         let menu_bar_op = egui::containers::TopBottomPanel::top("TopMenu")
@@ -154,14 +156,49 @@ impl eframe::App for VoiceVoxRust {
 
         if let Some(op) = menu_bar_op {
             match op {
-                TopMenuOp::NewProject => {}
+                TopMenuOp::NewProject => {
+                    if !self.histories.saved() {
+                        log::trace!("opening new project dialogue");
+                        self.opening_dialogues = Some(DialogueKind::AskDeleteProgress);
+                        self.block_menu_control = true;
+                    }
+                }
                 TopMenuOp::AudioOutput => {}
                 TopMenuOp::OutputOne => {}
                 TopMenuOp::OutputConnected => {}
                 TopMenuOp::LoadText => {}
-                TopMenuOp::OverwriteProject => {}
-                TopMenuOp::SaveProjectAs => {}
-                TopMenuOp::LoadProject => {}
+                TopMenuOp::OverwriteProject => {
+                    self.histories.save();
+                }
+                TopMenuOp::SaveProjectAs => {
+                    let file = rfd::FileDialog::new()
+                        .add_filter("VoiceVox project file", &["vvproj"])
+                        .set_directory("/")
+                        .save_file();
+                    if let Some(path) = file {
+                        std::fs::write(
+                            path.clone(),
+                            serde_json::to_string(&self.histories.project).unwrap(),
+                        );
+                        let path = path.to_str().map(|st| st.to_owned());
+
+                        self.opening_file = path;
+                        self.histories.save();
+                    }
+                }
+                TopMenuOp::LoadProject => {
+                    let file = rfd::FileDialog::new()
+                        .add_filter("VoiceVox project file", &["vvproj"])
+                        .set_directory("/")
+                        .pick_file();
+                    if let Some(path) = file {
+                        if let Ok(json) = std::fs::read_to_string(path.clone()) {
+                            let vvproj = serde_json::from_str(&json).unwrap();
+                            self.opening_file = path.to_str().map(|st| st.to_owned());
+                            self.histories = history::HistoryManager::from_project(vvproj);
+                        }
+                    }
+                }
                 TopMenuOp::RebootEngine => {}
                 TopMenuOp::KeyConfig => {}
                 TopMenuOp::ToolBarCustomize => {
@@ -194,7 +231,7 @@ impl eframe::App for VoiceVoxRust {
                                 &mut self.current_displaying,
                                 &mut should_play,
                                 ui,
-                                &query.accent_phrases,
+                                &query.accentPhrases,
                             ) {
                                 invocations
                                     .push((Box::new(cmd), self.current_selected_tts_line.clone()));
@@ -227,7 +264,7 @@ impl eframe::App for VoiceVoxRust {
                                                         speaker: ai.styleId,
                                                         enable_interrogative_upspeak: None,
                                                         core_version: None,
-                                                        audio_query: ai.query.unwrap(),
+                                                        audio_query: ai.query.unwrap().into(),
                                                     }
                                                     .call()
                                                     .await,
@@ -429,7 +466,9 @@ impl eframe::App for VoiceVoxRust {
                                                             new_text: text.clone(),
                                                             accent_phrases: aq
                                                                 .accent_phrases
-                                                                .clone(),
+                                                                .iter()
+                                                                .map(|ap| ap.clone().into())
+                                                                .collect(),
                                                             prev_text: self.back_up_text.clone(),
                                                         },
                                                     ),
@@ -471,7 +510,9 @@ impl eframe::App for VoiceVoxRust {
                                         crate::project::AudioItem {
                                             text: "".to_string(),
                                             styleId: 2,
-                                            query: BLANK_AUDIO_QUERY.get().cloned(),
+                                            query: Some(
+                                                BLANK_AUDIO_QUERY.get().cloned().unwrap().into(),
+                                            ),
                                             presetKey: None,
                                         },
                                     )),
@@ -605,60 +646,87 @@ impl eframe::App for VoiceVoxRust {
                         });
                     });
                 });
-                match self.opening_dialogues {
-                    None => {}
-                    Some(DialogueKind::ExitCustomize) => {
-                        let mut cell: Option<bool> = None;
-                        let dialogue = dialogue::Dialogue {
-                            title: "カスタマイズを放棄しますか",
-                            text: "このまま終了すると,カスタマイズは放棄されてリセットされます.",
-                            control_constructor: Box::new(ExitControl {}),
-                            cell: Some(&mut cell),
-                        };
-                        dialogue.show(ctx);
-                        match cell {
-                            Some(true) => {
-                                self.opening_dialogues = None;
-                                self.block_menu_control = false;
-                                self.current_view = CurrentView::Main;
-                            }
-                            Some(false) => {
-                                self.opening_dialogues = None;
-                            }
-                            _ => {}
-                        }
+            }
+        }
+
+        // process dialogue
+        match self.opening_dialogues {
+            None => {}
+            Some(DialogueKind::ExitCustomize) => {
+                let mut cell: Option<bool> = None;
+                let dialogue = dialogue::Dialogue {
+                    title: "カスタマイズを放棄しますか",
+                    text: "このまま終了すると,カスタマイズは放棄されてリセットされます.",
+                    control_constructor: Box::new(ExitControl {}),
+                    cell: Some(&mut cell),
+                };
+                dialogue.show(ctx);
+                match cell {
+                    Some(true) => {
+                        self.opening_dialogues = None;
+                        self.block_menu_control = false;
+                        self.current_view = CurrentView::Main;
                     }
-                    Some(DialogueKind::RestoreDefault) => {
-                        let mut cell: Option<bool> = None;
-                        let dialogue = dialogue::Dialogue {
-                            title: "ツールバーをデフォルトに戻します",
-                            text: "ツールバーをデフォルトに戻します.よろしいですか.",
-                            control_constructor: Box::new(crate::dialogue::AcceptControl {}),
-                            cell: Some(&mut cell),
-                        };
-                        dialogue.show(ctx);
-                        match cell {
-                            Some(true) => {
-                                self.opening_dialogues = None;
-                                self.block_menu_control = false;
-                                self.tool_bar_config_editing = vec![
-                                    ToolBarOp::PlayAll,
-                                    ToolBarOp::Stop,
-                                    ToolBarOp::ExportSelected,
-                                    ToolBarOp::Blank,
-                                    ToolBarOp::Undo,
-                                    ToolBarOp::Redo,
-                                ];
-                            }
-                            Some(false) => {
-                                self.opening_dialogues = None;
-                            }
-                            _ => {}
-                        }
+                    Some(false) => {
+                        self.opening_dialogues = None;
+                    }
+                    _ => {}
+                }
+            }
+            Some(DialogueKind::RestoreDefault) => {
+                let mut cell: Option<bool> = None;
+                let dialogue = dialogue::Dialogue {
+                    title: "ツールバーをデフォルトに戻します",
+                    text: "ツールバーをデフォルトに戻します.よろしいですか.",
+                    control_constructor: Box::new(crate::dialogue::AcceptControl {}),
+                    cell: Some(&mut cell),
+                };
+                dialogue.show(ctx);
+                match cell {
+                    Some(true) => {
+                        self.opening_dialogues = None;
+                        self.block_menu_control = false;
+                        self.tool_bar_config_editing = vec![
+                            ToolBarOp::PlayAll,
+                            ToolBarOp::Stop,
+                            ToolBarOp::ExportSelected,
+                            ToolBarOp::Blank,
+                            ToolBarOp::Undo,
+                            ToolBarOp::Redo,
+                        ];
+                    }
+                    Some(false) => {
+                        self.opening_dialogues = None;
+                    }
+                    _ => {}
+                }
+            }
+            Some(DialogueKind::AskDeleteProgress) => {
+                let mut cell: Option<bool> = None;
+                let dialogue = dialogue::Dialogue {
+                    title: "警告",
+                    text:
+                        "プロジェクトの変更が保存されていません.\n変更を破棄してもよろしいですか.",
+                    control_constructor: Box::new(crate::dialogue::AcceptControl {}),
+                    cell: Some(&mut cell),
+                };
+                dialogue.show(ctx);
+                match cell {
+                    None => {}
+                    Some(true) => {
+                        self.histories = history::HistoryManager::new();
+                        self.opening_dialogues = None;
+                        self.opening_file = None;
+                        self.block_menu_control = false;
+                    }
+                    Some(false) => {
+                        self.opening_dialogues = None;
+                        self.block_menu_control = false;
                     }
                 }
             }
         }
+
         for synthesis_state in self.synthesis_cache.values_mut() {
             match synthesis_state {
                 SynthesisState::WaitingForSynthesis(rx) => match rx.try_recv() {

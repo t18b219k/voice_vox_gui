@@ -1,11 +1,14 @@
 //! definition of VoiceVox openapi schema section.
 #![allow(dead_code)]
 
-use serde::{Deserialize, Serialize, Serializer};
 use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 
+/// this is Used in all around.
+///
+///
 #[allow(non_snake_case)]
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct AudioQuery {
     pub accent_phrases: Vec<AccentPhrase>,
     pub speedScale: f32,
@@ -19,7 +22,67 @@ pub struct AudioQuery {
     pub kana: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+/// this is used in AudioItem.
+///
+///
+#[allow(non_snake_case)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct AudioQueryInProject {
+    pub accentPhrases: Vec<AccentPhraseInProject>,
+    pub speedScale: f32,
+    pub pitchScale: f32,
+    pub intonationScale: f32,
+    pub volumeScale: f32,
+    pub prePhonemeLength: f32,
+    pub postPhonemeLength: f32,
+    pub outputSamplingRate: i32,
+    pub outputStereo: bool,
+    pub kana: Option<String>,
+}
+
+impl From<AudioQuery> for AudioQueryInProject {
+    fn from(aq: AudioQuery) -> Self {
+        Self {
+            accentPhrases: aq
+                .accent_phrases
+                .iter()
+                .map(|ap| ap.clone().into())
+                .collect(),
+            speedScale: aq.speedScale,
+            pitchScale: aq.pitchScale,
+            intonationScale: aq.intonationScale,
+            volumeScale: aq.volumeScale,
+            prePhonemeLength: aq.prePhonemeLength,
+            postPhonemeLength: aq.postPhonemeLength,
+            outputSamplingRate: aq.outputSamplingRate,
+            outputStereo: aq.outputStereo,
+            kana: aq.kana,
+        }
+    }
+}
+
+impl From<AudioQueryInProject> for AudioQuery {
+    fn from(aq: AudioQueryInProject) -> Self {
+        Self {
+            accent_phrases: aq
+                .accentPhrases
+                .iter()
+                .map(|ap| ap.clone().into())
+                .collect(),
+            speedScale: aq.speedScale,
+            pitchScale: aq.pitchScale,
+            intonationScale: aq.intonationScale,
+            volumeScale: aq.volumeScale,
+            prePhonemeLength: aq.prePhonemeLength,
+            postPhonemeLength: aq.postPhonemeLength,
+            outputSamplingRate: aq.outputSamplingRate,
+            outputStereo: aq.outputStereo,
+            kana: aq.kana,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct AccentPhrase {
     pub moras: Vec<Mora>,
     pub accent: i32,
@@ -27,7 +90,56 @@ pub struct AccentPhrase {
     pub is_interrogative: Option<bool>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[allow(non_snake_case)]
+#[derive(Deserialize, Debug, Clone, PartialEq)]
+pub struct AccentPhraseInProject {
+    pub moras: Vec<MoraInProject>,
+    pub accent: i32,
+    pub pause_mora: Option<MoraInProject>,
+    pub isInterrogative: Option<bool>,
+}
+
+impl Serialize for AccentPhraseInProject {
+    fn serialize<S>(&self, serializer: S) -> Result<<S as Serializer>::Ok, <S as Serializer>::Error>
+    where
+        S: Serializer,
+    {
+        let mut s = serializer.serialize_struct("AccentPhrase", 4)?;
+        s.serialize_field("moras", &self.moras)?;
+        s.serialize_field("accent", &self.accent)?;
+        if let Some(pause_mora) = &self.pause_mora {
+            s.serialize_field("pause_mora", pause_mora)?;
+        } else {
+            s.skip_field("pause_mora")?;
+        }
+        s.serialize_field("isInterrogative", &self.isInterrogative.unwrap_or(false))?;
+        s.end()
+    }
+}
+
+impl From<AccentPhrase> for AccentPhraseInProject {
+    fn from(ap: AccentPhrase) -> Self {
+        Self {
+            moras: ap.moras.iter().map(|mora| mora.clone().into()).collect(),
+            accent: ap.accent,
+            pause_mora: ap.pause_mora.map(|mora| mora.clone().into()),
+            isInterrogative: ap.is_interrogative,
+        }
+    }
+}
+
+impl From<AccentPhraseInProject> for AccentPhrase {
+    fn from(ap: AccentPhraseInProject) -> Self {
+        Self {
+            moras: ap.moras.iter().map(|mora| mora.clone().into()).collect(),
+            accent: ap.accent,
+            pause_mora: ap.pause_mora.map(|mora| mora.clone().into()),
+            is_interrogative: ap.isInterrogative,
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Mora {
     pub text: String,
     pub consonant: Option<String>,
@@ -35,6 +147,47 @@ pub struct Mora {
     pub vowel: String,
     pub vowel_length: f32,
     pub pitch: f32,
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+pub struct MoraInProject {
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub consonant: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub consonantLength: Option<f32>,
+    pub vowel: String,
+    pub vowelLength: f32,
+    pub pitch: f32,
+}
+
+impl From<Mora> for MoraInProject {
+    fn from(mora: Mora) -> Self {
+        Self {
+            text: mora.text,
+            consonant: mora.consonant,
+            consonantLength: mora.consonant_length,
+            vowel: mora.vowel,
+            vowelLength: mora.vowel_length,
+            pitch: mora.pitch,
+        }
+    }
+}
+
+impl From<MoraInProject> for Mora {
+    fn from(mora: MoraInProject) -> Self {
+        Self {
+            text: mora.text.clone(),
+            consonant: mora.consonant.clone(),
+            consonant_length: mora.consonantLength,
+            vowel: mora.vowel.clone(),
+            vowel_length: mora.vowelLength,
+            pitch: mora.pitch,
+        }
+    }
 }
 
 #[allow(non_snake_case)]

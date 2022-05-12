@@ -8,7 +8,7 @@ pub enum AudioQueryCommands {
     UpdateAccentPhrases {
         new_text: String,
         prev_text: String,
-        accent_phrases: Vec<api_schema::AccentPhrase>,
+        accent_phrases: Vec<api_schema::AccentPhraseInProject>,
     },
 }
 
@@ -41,7 +41,7 @@ impl Command for AudioQueryCommands {
                     ai.text = new_text.clone();
                     log::debug!("{} text {} -> {}", uuid, prev_text, ai.text);
                     if let Some(aq) = &mut ai.query {
-                        std::mem::swap(&mut aq.accent_phrases, accent_phrases);
+                        std::mem::swap(&mut aq.accentPhrases, accent_phrases);
                         log::debug!("swapped {} accent_phrases", uuid);
                     }
                 }
@@ -68,13 +68,13 @@ impl Command for AudioQueryCommands {
             AudioQueryCommands::UpdateAccentPhrases {
                 new_text,
                 prev_text,
-                accent_phrases,
+                accent_phrases: accentPhrases,
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     ai.text = prev_text.clone();
                     log::debug!("{} text {} -> {}", uuid, new_text, prev_text);
                     if let Some(aq) = &mut ai.query {
-                        std::mem::swap(&mut aq.accent_phrases, accent_phrases);
+                        std::mem::swap(&mut aq.accentPhrases, accentPhrases);
                         log::debug!("swapped {} accent_phrases", uuid);
                     }
                 }
@@ -139,12 +139,12 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        assert!(*index + 1 < aq.accent_phrases.len());
-                        let right_moras = aq.accent_phrases[*index + 1].moras.clone();
-                        aq.accent_phrases[*index]
+                        assert!(*index + 1 < aq.accentPhrases.len());
+                        let right_moras = aq.accentPhrases[*index + 1].moras.clone();
+                        aq.accentPhrases[*index]
                             .moras
                             .extend_from_slice(&right_moras);
-                        aq.accent_phrases.remove(*index + 1);
+                        aq.accentPhrases.remove(*index + 1);
                     }
                 }
             }
@@ -154,14 +154,14 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        assert!(*index < aq.accent_phrases.len());
-                        let insert = crate::api_schema::AccentPhrase {
-                            moras: aq.accent_phrases[*index].moras.split_off(*mora),
+                        assert!(*index < aq.accentPhrases.len());
+                        let insert = crate::api_schema::AccentPhraseInProject {
+                            moras: aq.accentPhrases[*index].moras.split_off(*mora),
                             accent: 0,
                             pause_mora: None,
-                            is_interrogative: None,
+                            isInterrogative: None,
                         };
-                        aq.accent_phrases.insert(*index + 1, insert);
+                        aq.accentPhrases.insert(*index + 1, insert);
                     }
                 }
             }
@@ -172,7 +172,7 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].accent = *new_accent as i32;
+                        aq.accentPhrases[*accent_phrase].accent = *new_accent as i32;
                     }
                 }
             }
@@ -183,7 +183,7 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch += *pitch_diff;
+                        aq.accentPhrases[*accent_phrase].moras[*mora].pitch += *pitch_diff;
                     }
                 }
             }
@@ -196,11 +196,11 @@ impl Command for BottomPaneCommand {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
                         if let Some(vd) = vowel_diff {
-                            aq.accent_phrases[*accent_phrase].moras[*mora].vowel_length += *vd;
+                            aq.accentPhrases[*accent_phrase].moras[*mora].vowelLength += *vd;
                         }
                         if let Some(cd) = consonant_diff {
                             if let Some(consonant) =
-                                &mut aq.accent_phrases[*accent_phrase].moras[*mora].consonant_length
+                                &mut aq.accentPhrases[*accent_phrase].moras[*mora].consonantLength
                             {
                                 *consonant += *cd;
                             }
@@ -219,14 +219,14 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        assert!(*index < aq.accent_phrases.len());
-                        let insert = crate::api_schema::AccentPhrase {
-                            moras: aq.accent_phrases[*index].moras.split_off(*length),
+                        assert!(*index < aq.accentPhrases.len());
+                        let insert = crate::api_schema::AccentPhraseInProject {
+                            moras: aq.accentPhrases[*index].moras.split_off(*length),
                             accent: 0,
                             pause_mora: None,
-                            is_interrogative: None,
+                            isInterrogative: None,
                         };
-                        aq.accent_phrases.insert(*index + 1, insert);
+                        aq.accentPhrases.insert(*index + 1, insert);
                     }
                 }
             }
@@ -236,12 +236,12 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        assert!(*index + 1 < aq.accent_phrases.len());
-                        let right_moras = aq.accent_phrases[*index + 1].moras.clone();
-                        aq.accent_phrases[*index]
+                        assert!(*index + 1 < aq.accentPhrases.len());
+                        let right_moras = aq.accentPhrases[*index + 1].moras.clone();
+                        aq.accentPhrases[*index]
                             .moras
                             .extend_from_slice(&right_moras);
-                        aq.accent_phrases.remove(*index + 1);
+                        aq.accentPhrases.remove(*index + 1);
                     }
                 }
             }
@@ -252,7 +252,7 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].accent = *prev_accent as i32;
+                        aq.accentPhrases[*accent_phrase].accent = *prev_accent as i32;
                     }
                 }
             }
@@ -263,7 +263,7 @@ impl Command for BottomPaneCommand {
             } => {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
-                        aq.accent_phrases[*accent_phrase].moras[*mora].pitch -= *pitch_diff;
+                        aq.accentPhrases[*accent_phrase].moras[*mora].pitch -= *pitch_diff;
                     }
                 }
             }
@@ -276,11 +276,11 @@ impl Command for BottomPaneCommand {
                 if let Some(ai) = project.audioItems.get_mut(uuid) {
                     if let Some(aq) = &mut ai.query {
                         if let Some(vd) = vowel_diff {
-                            aq.accent_phrases[*accent_phrase].moras[*mora].vowel_length -= *vd;
+                            aq.accentPhrases[*accent_phrase].moras[*mora].vowelLength -= *vd;
                         }
                         if let Some(cd) = consonant_diff {
                             if let Some(consonant) =
-                                &mut aq.accent_phrases[*accent_phrase].moras[*mora].consonant_length
+                                &mut aq.accentPhrases[*accent_phrase].moras[*mora].consonantLength
                             {
                                 *consonant -= *cd;
                             }

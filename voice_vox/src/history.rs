@@ -29,10 +29,11 @@ pub struct HistoryManager {
     redo_stack: Vec<(Box<dyn Command>, String)>,
     update_times: HashMap<String, (Vec<tokio::time::Instant>, usize)>,
     pub project: crate::VoiceVoxProject,
+    last_saved_snapshot: Option<crate::VoiceVoxProject>,
 }
 
 impl HistoryManager {
-    pub async fn new() -> Self {
+    pub fn new() -> Self {
         let blank = uuid::Uuid::new_v4();
         let dummy = blank.to_string();
         let mut items = HashMap::new();
@@ -41,14 +42,7 @@ impl HistoryManager {
             crate::project::AudioItem {
                 text: "".to_string(),
                 styleId: 2,
-                query: crate::api::AudioQuery {
-                    text: "".to_string(),
-                    speaker: 2,
-                    core_version: None,
-                }
-                .call()
-                .await
-                .ok(),
+                query: Some(crate::BLANK_AUDIO_QUERY.get().unwrap().clone().into()),
                 presetKey: None,
             },
         );
@@ -61,9 +55,18 @@ impl HistoryManager {
                 audioKeys: vec![dummy],
                 audioItems: items,
             },
+            last_saved_snapshot: None,
         }
     }
-
+    pub fn from_project(project: VoiceVoxProject) -> Self {
+        Self {
+            undo_stack: vec![],
+            redo_stack: vec![],
+            update_times: Default::default(),
+            project,
+            last_saved_snapshot: None,
+        }
+    }
     /// execute command and record to undo stack.
     pub fn invoke(&mut self, mut command: Box<dyn Command>, uuid: String) {
         command.invoke(&mut self.project, &uuid);
@@ -118,5 +121,31 @@ impl HistoryManager {
         self.update_times
             .get(uuid)
             .map(|(times, cursor)| times[*cursor])
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.undo_stack.is_empty() && self.redo_stack.is_empty()
+    }
+
+    pub fn undoable(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    pub fn redoable(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
+    pub fn saved(&self) -> bool {
+        if let Some(ss) = &self.last_saved_snapshot {
+            ss == &self.project
+        } else if self.is_empty() {
+            true
+        } else {
+            false
+        }
+    }
+
+    pub fn save(&mut self) {
+        self.last_saved_snapshot = Some(self.project.clone());
     }
 }

@@ -1,11 +1,10 @@
-use crate::api_schema::AudioQuery;
-
 use crate::commands::AudioQueryEditCommand;
 
 use eframe::egui::Ui;
+use voice_vox_api::api_schema::AudioQueryInProject;
 
 pub fn render_synthesis_control(
-    aq_prev: &AudioQuery,
+    aq_prev: &AudioQueryInProject,
     ui: &mut Ui,
 ) -> Option<AudioQueryEditCommand> {
     let mut rt = None;

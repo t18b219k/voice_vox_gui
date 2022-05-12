@@ -5,6 +5,7 @@ use eframe::egui::{
     Align, Align2, FontId, Layout, NumExt, Response, SelectableLabel, TextStyle, Ui, Vec2, Widget,
 };
 use std::ops::RangeInclusive;
+use voice_vox_api::api_schema::AccentPhraseInProject;
 
 /// アクセント位置とアクセント句の変化で新しくリクエストを送る必要がある.
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -18,7 +19,7 @@ pub fn create_bottom_pane(
     current_displaying: &mut Displaying,
     should_play: &mut Option<bool>,
     ui: &mut Ui,
-    edit_targets: &[AccentPhrase],
+    edit_targets: &[AccentPhraseInProject],
 ) -> Option<BottomPaneCommand> {
     let mut rt = None;
     ui.horizontal(|ui| {
@@ -275,9 +276,9 @@ pub fn create_bottom_pane(
                                 for (ap, edit_target) in edit_targets.iter().enumerate() {
                                     let mora_len = edit_target.moras.len();
                                     for (index, mora) in edit_target.moras.iter().enumerate() {
-                                        if let Some(prev_consonant) = mora.consonant_length {
+                                        if let Some(prev_consonant) = mora.consonantLength {
                                             let mut consonant = prev_consonant;
-                                            let mut vowel = mora.vowel_length;
+                                            let mut vowel = mora.vowelLength;
                                             let slider = TwoNotchSlider {
                                                 a: &mut consonant,
                                                 b: &mut vowel,
@@ -288,10 +289,10 @@ pub fn create_bottom_pane(
 
                                             let vowel_diff = if (res.clicked()
                                                 | res.drag_released())
-                                                & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                                & ((vowel - mora.vowelLength).abs() > f32::EPSILON)
                                             {
                                                 log::debug!("vowel {}", vowel);
-                                                Some(vowel - mora.vowel_length)
+                                                Some(vowel - mora.vowelLength)
                                             } else {
                                                 None
                                             };
@@ -315,7 +316,7 @@ pub fn create_bottom_pane(
                                                 });
                                             }
                                         } else {
-                                            let mut vowel = mora.vowel_length;
+                                            let mut vowel = mora.vowelLength;
                                             let slider =
                                                 eframe::egui::Slider::new(&mut vowel, 0.0..=0.30)
                                                     .vertical()
@@ -324,13 +325,13 @@ pub fn create_bottom_pane(
                                             let res = ui.add(slider);
 
                                             if (res.clicked() | res.drag_released())
-                                                & ((vowel - mora.vowel_length).abs() > f32::EPSILON)
+                                                & ((vowel - mora.vowelLength).abs() > f32::EPSILON)
                                             {
                                                 //emit signal.
                                                 rt = Some(BottomPaneCommand::VowelAndConsonant {
                                                     accent_phrase: ap,
                                                     mora: index,
-                                                    vowel_diff: Some(vowel - mora.vowel_length),
+                                                    vowel_diff: Some(vowel - mora.vowelLength),
                                                     consonant_diff: None,
                                                 });
                                             }
