@@ -20,4 +20,4 @@ serde_json = "1.0.81"
 tokio = { version = "1", features = ["once_cell","net","time","test-util","rt-multi-thread","macros"] }
 uuid={version="1",features=["v4"]}
 voice_vox_api={path="../voice_vox_api"}
-rfd="0.8"
+rfd="0.9"
